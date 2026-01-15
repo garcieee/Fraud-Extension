@@ -19,6 +19,13 @@
             white-space: pre-wrap;
         }
 
+        #message {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+            margin: 10px 0;
+        }
+
         .hidden {
             display: none;
         }
@@ -41,15 +48,18 @@
     <p>Urgent! Verify your account immediately to claim your reward.</p>
 
     <button id="run-btn">Run Scraper</button>
+    <div id="message"></div>
     <pre id="output"></pre>
 
     <script type="module">
-        import { extractPageSignals } from '../scraper/scraper.js';
+        import { extractPageSignals, saveScrapeResults } from '../scraper/scraper.js';
 
         document.getElementById('run-btn').addEventListener('click', () => {
             const signals = extractPageSignals();
-            document.getElementById('output').textContent = JSON.stringify(signals, null, 2);
-            console.log(signals);
+            const filename = saveScrapeResults(signals);
+            document.getElementById('message').textContent = 'Website scraped';
+            document.getElementById('output').textContent = `Saved to: ${filename}\n\n${JSON.stringify(signals, null, 2)}`;
+            console.log('Scrape results:', signals);
         });
     </script>
 </body>
