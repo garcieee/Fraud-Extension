@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraper Test Harness</title>
+    <meta name="description" content="This is a test page for the fraud scraper.">
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        #output {
+            background: #eee;
+            padding: 10px;
+            border: 1px solid #ccc;
+            white-space: pre-wrap;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Scraper Test Harness</h1>
+
+    <!-- Test Elements -->
+    <form action="http://phishing-site.com/login">
+        <input type="text" name="username" placeholder="Username">
+        <input type="password" name="password" placeholder="Password">
+        <input type="text" name="cc_number" placeholder="Credit Card">
+    </form>
+
+    <div style="display:none">Hidden Content</div>
+    <div style="position:fixed; width:100%; height:100%; z-index:9999; pointer-events:none;">Overlay (Simulated)</div>
+
+    <p>Urgent! Verify your account immediately to claim your reward.</p>
+
+    <button id="run-btn">Run Scraper</button>
+    <pre id="output"></pre>
+
+    <script type="module">
+        import { extractPageSignals } from '../scraper/scraper.js';
+
+        document.getElementById('run-btn').addEventListener('click', () => {
+            const signals = extractPageSignals();
+            document.getElementById('output').textContent = JSON.stringify(signals, null, 2);
+            console.log(signals);
+        });
+    </script>
+</body>
+
+</html>
