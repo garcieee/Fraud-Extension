@@ -26,6 +26,14 @@
             margin: 10px 0;
         }
 
+        #url-input {
+            width: 100%;
+            max-width: 600px;
+            padding: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
         .hidden {
             display: none;
         }
@@ -47,7 +55,14 @@
 
     <p>Urgent! Verify your account immediately to claim your reward.</p>
 
-    <button id="run-btn">Run Scraper</button>
+    <div>
+        <label for="url-input">URL to scrape (navigate to this page first):</label><br>
+        <input type="url" id="url-input" placeholder="https://example.com"
+            value="https://en.wikipedia.org/wiki/Main_Page">
+        <button id="navigate-btn">Navigate to URL</button>
+    </div>
+
+    <button id="run-btn">Scrape Current Page</button>
     <div id="message"></div>
     <pre id="output"></pre>
 
@@ -60,6 +75,15 @@
             document.getElementById('message').textContent = 'Website scraped';
             document.getElementById('output').textContent = `Saved to: ${filename}\n\n${JSON.stringify(signals, null, 2)}`;
             console.log('Scrape results:', signals);
+        });
+
+        document.getElementById('navigate-btn').addEventListener('click', () => {
+            const url = document.getElementById('url-input').value.trim();
+            if (url) {
+                window.location.href = url;
+            } else {
+                alert('Please enter a URL');
+            }
         });
     </script>
 </body>
