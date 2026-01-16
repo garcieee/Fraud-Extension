@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      :root {
+        --bg-dark: #09090b;
+        --bg-gradient: radial-gradient(circle at top center, #1f2937, #09090b);
+        --card-surface: rgba(255, 255, 255, 0.03);
+        --border: rgba(255, 255, 255, 0.1);
+        --primary: #3b82f6;
+        --accent-glow: rgba(59, 130, 246, 0.5);
+        --text-main: #f3f4f6;
+        --text-sub: #9ca3af; 
+        
+        --safe: #10b981;   
+        --warning: #f59e0b; 
+        --danger: #ef4444; 
+      }
+
+      body {
+        width: 320px;
+        background: var(--bg-gradient);
+        color: var(--text-main);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; 
+        height: 100vh;
+      }
+
+      header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0,0,0,0.2);
+      }
+
+      h1 {
+        font-size: 13px;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 1px;
+        color: var(--text-sub);
+        text-transform: uppercase;
+      }
+
+      .badge {
+        font-size: 10px;
+        background: rgba(255,255,255,0.1);
+        padding: 3px 6px;
+        border-radius: 4px;
+        color: var(--text-sub);
+        border: 1px solid var(--border);
+      }
+
+      .score-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 30px 20px 20px; 
+        position: relative;
+      }
+
+      .progress-ring {
+        position: relative;
+        width: 130px;
+        height: 130px;
+        filter: drop-shadow(0 0 15px rgba(0,0,0,0.5));
+      }
+
+      .progress-ring__circle-bg { stroke: var(--border); }
+      
+      .progress-ring__circle {
+        transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+        stroke-linecap: round;
+      }
+
+      .center-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #hero-icon {
+        font-size: 42px;
+        opacity: 0.8;
+        filter: drop-shadow(0 0 10px var(--accent-glow));
+        transition: all 0.3s ease;
+      }
+
+      .score-wrap {
+        display: none;
+        animation: fadeIn 0.5s ease;
+      }
+
+      .score-number {
+        font-size: 36px;
+        font-weight: 800;
+        line-height: 1;
+        background: linear-gradient(to bottom, #fff, #ccc);
+        -webkit-background-clip: text;
+        background-clip: text; 
+        -webkit-text-fill-color: transparent;
+        color: transparent; 
+      }
+
+      .score-label {
+        font-size: 10px;
+        color: var(--text-sub); 
+        margin-top: 4px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .verdict {
+        margin-top: 15px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-sub); 
+        text-align: center;
+        opacity: 0; 
+        height: 15px; 
+        transition: opacity 0.5s ease;
+        letter-spacing: 0.3px;
+      }
+      
+      .verdict.show { opacity: 1; }
+
+      .details {
+        padding: 10px 24px 24px;
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center; 
+        border-bottom: none; 
+        padding: 6px 0;
+        margin-bottom: 8px; 
+      }
+      
+      .label-group { display: flex; align-items: center; gap: 8px; }
+      .detail-label { color: var(--text-sub); font-size: 13px; }
+
+      .detail-value {
+        font-weight: 500; 
+        font-size: 13px;
+        color: var(--text-main);
+      }
+
+      .blur-text {
+        color: transparent;
+        text-shadow: 0 0 8px rgba(255,255,255,0.5);
+        user-select: none;
+        transition: all 0.5s ease;
+      }
+
+      .text-safe { color: var(--safe) !important; text-shadow: none; }
+      .text-warning { color: var(--warning) !important; text-shadow: none; }
+      .text-danger { color: var(--danger) !important; text-shadow: none; }
+
+      .info-icon {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid #52525b;
+        color: #52525b;
+        font-size: 9px;
+        cursor: help;
+        position: relative; 
+        transition: all 0.2s;
+      }
+
+      .info-icon:hover { border-color: var(--text-main); color: var(--text-main); }
+      
+      .info-icon:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 140%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #18181b;
+        color: #d4d4d8;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        width: max-content;
+        max-width: 180px;
+        line-height: 1.4;
+        z-index: 100;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        pointer-events: none;
+        text-align: center;
+      }
+
+      .action-area {
+        padding: 20px;
+        background: var(--card-surface);
+        border-top: 1px solid var(--border);
+      }
+
+      button {
+        width: 100%;
+        padding: 14px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary), #2563eb);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.1);
+      }
+      .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+      .btn-reset {
+        background: transparent;
+        color: var(--text-sub);
+        border: 1px solid var(--border);
+        box-shadow: none;
+      }
+      .btn-reset:hover { 
+        border-color: var(--text-main);
+        color: var(--text-main);
+      }
+
+      button:active { transform: scale(0.98); }
+      button:disabled { 
+        background: #27272a; 
+        color: #52525b; 
+        border: 1px solid var(--border);
+        box-shadow: none;
+        cursor: wait; 
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+  </head>
+  <body>
+    
+    <header>
+      <h1>Fraud Extension</h1>
+      <span class="badge">V 1.0</span>
+    </header>
+
+    <div class="score-container">
+      <div class="progress-ring">
+        <svg width="130" height="130">
+          <circle 
+            class="progress-ring__circle-bg"
+            stroke-width="6" 
+            fill="transparent" 
+            r="58" 
+            cx="65" 
+            cy="65" 
+          />
+          <circle 
+            id="score-circle"
+            class="progress-ring__circle"
+            stroke="#10b981" 
+            stroke-width="6" 
+            fill="transparent" 
+            r="58" 
+            cx="65" 
+            cy="65" 
+            stroke-dasharray="364" 
+            stroke-dashoffset="364"
+          />
+        </svg>
+        
+        <div class="center-content">
+          <div id="hero-icon">🛡️</div>
+          <div id="score-wrap" class="score-wrap">
+            <div class="score-number" id="score-display">0</div>
+            <div class="score-label">TRUST SCORE</div>
+          </div>
+        </div>
+      </div>
+      <div id="verdict" class="verdict"></div>
+    </div>
+
+    <div class="details">
+      <div class="detail-row">
+        <div class="label-group">
+          <span class="detail-label">Website History</span>
+          <div class="info-icon" data-tooltip="Domain age and registration details.">i</div>
+        </div>
+        <span class="detail-value blur-text" id="domain-val">Unknown</span>
+      </div>
+      
+      <div class="detail-row">
+        <div class="label-group">
+          <span class="detail-label">Connection Security</span>
+          <div class="info-icon" data-tooltip="SSL Encryption status.">i</div>
+        </div>
+        <span class="detail-value blur-text" id="ssl-val">Unknown</span>
+      </div>
+    </div>
+
+    <div class="action-area">
+      <button id="scanBtn" class="btn-primary">Analyze Page</button>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
