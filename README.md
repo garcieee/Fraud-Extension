@@ -2,19 +2,6 @@
 
 A browser extension that detects fraudulent and malicious content on web pages.
 
-## Installation
-
-1. **Open Chrome/Edge Extensions page:**
-   - Chrome: `chrome://extensions/`
-   - Edge: `edge://extensions/`
-   - Or: Menu → Extensions → Manage Extensions
-
-2. **Enable Developer Mode** (toggle in top-right)
-
-3. **Load the extension:**
-   - Click "Load unpacked"
-   - Select the `extension` folder from this project
-
 ## How to Use
 
 1. **Navigate to any website** you want to analyze
