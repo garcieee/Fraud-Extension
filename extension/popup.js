@@ -139,6 +139,31 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (response.success) {
         const { trustScore, signals } = response;
+
+        // send data to render api
+        const API_URL = "https://fraud-api-993p.onrender.com/scan";
+        console.log("🚀 Sending data to Backend:", API_URL);
+
+        fetch(API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                url: tab.url,
+                text_content: signals.content ? signals.content.text : "Text extraction pending", 
+                trust_score: trustScore
+            })
+        })
+        .then(res => res.json())
+        .then(serverData => {
+            console.log("✅ Backend Received Data!", serverData);
+            verdict.textContent += " (Verified by Cloud)";
+        })
+        .catch(err => {
+            console.error("❌ Backend Error:", err);
+        });
+
         
         // Save JSON file
         const domain = signals.page_identity.domain || 'unknown';
