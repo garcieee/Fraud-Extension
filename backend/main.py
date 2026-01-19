@@ -1,21 +1,25 @@
-from fastapi import FastAPI, Header, HTTPException
+import os
+import requests
+from fastapi import FastAPI, Header, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
-# --- 1. Security: CORS ---
-# Explanation: Browsers block extensions from talking to unknown servers.
-# This tells the browser "It is okay to talk to me."
+
+QSTASH_TOKEN = os.getenv("QSTASH_TOKEN")
+MY_API_URL = os.getenv("RENDER_EXTERNAL_URL", "https://fraud-api-993p.onrender.com")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # We will restrict this to your Extension ID in Phase 3
+    allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- 2. Data Model ---
-# Explanation: This defines the shape of the data we expect from Chrome.
 class ScanRequest(BaseModel):
     url: str
     text_content: str = ""
@@ -23,23 +27,35 @@ class ScanRequest(BaseModel):
 
 @app.get("/")
 def home():
-    return {"status": "Online", "stack": "Render + FastAPI"}
+    return {"status": "Online", "mode": "QStash Async"}
 
 @app.post("/scan")
-def receive_scan(data: ScanRequest, authorization: str = Header(None)):
-    # --- AUTH STUB (Firebase) ---
-    # We are just logging it for now. Later we will verify the token.
-    if not authorization:
-        print("⚠️ No Auth Token received")
+def receive_scan(data: ScanRequest):
+    print(f"📥 Received Scan for: {data.url}")
     
-    print(f"📥 Received Scan: {data.url}")
-    print(f"📊 Local Score: {data.trust_score}")
+    if QSTASH_TOKEN:
+        destination = f"{MY_API_URL}/process"
+        qstash_url = f"https://qstash.upstash.io/v2/publish/{destination}"
+        
+        headers = {
+            "Authorization": f"Bearer {QSTASH_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.post(qstash_url, headers=headers, json=data.dict())
+            print(f"✅ Offloaded to QStash: {response.status_code}")
+        except Exception as e:
+            print(f"❌ QStash Connection Failed: {e}")
+
+    return {"status": "queued", "message": "Analysis started in background"}
+
+@app.post("/process")
+async def process_scan(request: Request):
+    body = await request.json()
+    print(f"⚙️ WORKER: Processing job for {body.get('url')}")
     
-    # --- FUTURE INTEGRATION POINTS ---
-    # 1. TODO: Push 'data' to Upstash Kafka
-    # 2. TODO: Send 'text_content' to Hugging Face
+    # PHASE 2 TODO: Call Hugging Face here
+    # PHASE 3 TODO: Save to Neo4j here
     
-    return {
-        "status": "received", 
-        "verdict": "Processing (Backend Active)"
-    }
+    return {"status": "processed"}
