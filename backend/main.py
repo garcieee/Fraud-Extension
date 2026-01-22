@@ -1,5 +1,8 @@
 import os
+import json
 import requests
+from datetime import datetime
+from pathlib import Path
 from fastapi import FastAPI, Header, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,9 +12,12 @@ load_dotenv()
 
 app = FastAPI()
 
-
 QSTASH_TOKEN = os.getenv("QSTASH_TOKEN")
 MY_API_URL = os.getenv("RENDER_EXTERNAL_URL", "https://fraud-api-993p.onrender.com")
+
+# Create data folder if it doesn't exist
+DATA_FOLDER = Path("data")
+DATA_FOLDER.mkdir(exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,8 +28,8 @@ app.add_middleware(
 
 class ScanRequest(BaseModel):
     url: str
-    text_content: str = ""
     trust_score: int = 0
+    signals: dict = {}
 
 @app.get("/")
 def home():
@@ -53,9 +59,42 @@ def receive_scan(data: ScanRequest):
 @app.post("/process")
 async def process_scan(request: Request):
     body = await request.json()
-    print(f"⚙️ WORKER: Processing job for {body.get('url')}")
+    url = body.get('url', 'unknown')
+    trust_score = body.get('trust_score', 0)
+    signals = body.get('signals', {})
+    
+    print(f"⚙️ WORKER: Processing job for {url}")
+    
+    # Extract domain for filename
+    try:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc.replace('.', '-') or 'unknown'
+    except:
+        domain = 'unknown'
+    
+    # Create filename with timestamp
+    timestamp = datetime.now().isoformat().replace(':', '-').replace('.', '-')
+    filename = f"{domain}_{timestamp}.json"
+    filepath = DATA_FOLDER / filename
+    
+    # Prepare data to save
+    data_to_save = {
+        "url": url,
+        "trust_score": trust_score,
+        "timestamp": datetime.now().isoformat(),
+        "signals": signals
+    }
+    
+    # Save to data folder
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+        print(f"✅ Saved JSON to: {filepath}")
+    except Exception as e:
+        print(f"❌ Error saving file: {e}")
+        return {"status": "error", "message": str(e)}
     
     # PHASE 2 TODO: Call Hugging Face here
     # PHASE 3 TODO: Save to Neo4j here
     
-    return {"status": "processed"}
+    return {"status": "processed", "file": filename}

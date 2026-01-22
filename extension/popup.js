@@ -139,8 +139,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (response.success) {
         const { trustScore, signals } = response;
-
-        // send data to render api
+        
+        // Send full JSON data to backend
         const API_URL = "https://fraud-api-993p.onrender.com/scan";
         console.log("🚀 Sending data to Backend:", API_URL);
 
@@ -151,35 +151,18 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({
                 url: tab.url,
-                text_content: signals.content ? signals.content.text : "Text extraction pending", 
-                trust_score: trustScore
+                trust_score: trustScore,
+                signals: signals
             })
         })
         .then(res => res.json())
         .then(serverData => {
             console.log("✅ Backend Received Data!", serverData);
-            verdict.textContent += " (Verified by Cloud)";
+            verdict.textContent += " (Saved to Cloud)";
         })
         .catch(err => {
             console.error("❌ Backend Error:", err);
         });
-
-        
-        // Save JSON file
-        const domain = signals.page_identity.domain || 'unknown';
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `${domain}_${timestamp}.json`;
-        const jsonData = JSON.stringify(signals, null, 2);
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        console.log('[Popup] Saved JSON file:', filename);
         
         heroIcon.style.animation = "none";
         animateScore(trustScore);

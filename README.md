@@ -1,26 +1,64 @@
 # Fraud-Extension
 
-A browser extension that detects fraudulent and malicious content on web pages.
+A browser extension that detects fraudulent and malicious content on web pages, with backend processing and storage.
 
-## How to Use
+## How It Works
 
-1. **Navigate to any website** you want to analyze
-2. **Click the extension icon** in your browser toolbar
-3. **Click "Analyze Page"** button
-4. **View results:**
-   - Trust score (0-100) with color coding
-   - Verdict message
-   - Domain and SSL information
+1. **Extension** - Scans pages for fraud signals and calculates trust score
+2. **Backend API** - Receives scan data and queues it via QStash
+3. **Worker** - Processes queued jobs and saves JSON to `backend/data/` folder
 
-The extension analyzes the current page you're viewing - no separate website needed!
+## Extension Usage
 
-## Testing
+1. **Load extension:**
+   - Open `chrome://extensions/` or `edge://extensions/`
+   - Enable Developer Mode
+   - Click "Load unpacked" → Select `extension` folder
 
-1. Load the extension (see Installation above)
-2. Visit any website (e.g., `https://example.com`)
-3. Click the extension icon
-4. Click "Analyze Page"
-5. Results appear in the popup
+2. **Use it:**
+   - Navigate to any website
+   - Click extension icon → "Analyze Page"
+   - View trust score and results in popup
+   - Data automatically sent to backend and saved
+
+## Backend Setup
+
+1. **Install dependencies:**
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+2. **Set environment variables:**
+   Create `.env` file:
+   ```
+   QSTASH_TOKEN=your_qstash_token
+   RENDER_EXTERNAL_URL=https://fraud-api-993p.onrender.com
+   ```
+
+3. **Run backend:**
+   ```bash
+   uvicorn main:app --reload
+   ```
+
+4. **Data storage:**
+   - Scanned data saved to `backend/data/` folder
+   - Files named: `domain_timestamp.json`
+   - Contains: URL, trust score, timestamp, full signals data
+
+## Architecture
+
+**Extension Flow:**
+- User clicks "Analyze Page"
+- Scraper extracts fraud signals
+- Calculates trust score (0-100)
+- Sends JSON to backend API
+
+**Backend Flow:**
+- `/scan` endpoint receives data
+- Queues job via QStash
+- `/process` worker processes job
+- Saves JSON to `data/` folder
 
 ## What It Detects
 
@@ -37,6 +75,11 @@ The extension analyzes the current page you're viewing - no separate website nee
 extension/
   ├── manifest.json       # Extension configuration
   ├── popup.html          # Extension popup UI
-  ├── popup.js            # Popup logic
+  ├── popup.js            # Popup logic & API calls
   └── scraper-bundle.js   # Fraud detection scraper
+
+backend/
+  ├── main.py             # FastAPI server with QStash queue
+  ├── requirements.txt    # Python dependencies
+  └── data/               # Saved scan JSON files
 ```
