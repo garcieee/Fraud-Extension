@@ -1,13 +1,10 @@
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('[Popup] DOM loaded, initializing...');
   const scanButton = document.getElementById('scanBtn');
   
   if (!scanButton) {
     console.error('[Popup] ERROR: scanBtn button not found!');
     return;
   }
-  
-  console.log('[Popup] Button found, setting up listener...');
   
   const heroIcon = document.getElementById('hero-icon');
   const scoreWrap = document.getElementById('score-wrap');
@@ -49,14 +46,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function revealDetails(scoreClass) {
-    domainVal.className = 'detail-value';
-    sslVal.className = 'detail-value';
-
-    domainVal.classList.add(scoreClass);
-    sslVal.classList.add(scoreClass);
-
-    domainVal.textContent = "Long-term (Safe)";
-    sslVal.textContent = "Encrypted (Secure)";
+    domainVal.className = `detail-value ${scoreClass}`;
+    sslVal.className = `detail-value ${scoreClass}`;
   }
 
   function resetUI() {
@@ -82,8 +73,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   scanButton.addEventListener('click', async function() {
-    console.log('[Popup] Button clicked');
-    
     if (isScanned) {
       resetUI();
       return;
@@ -94,33 +83,27 @@ document.addEventListener('DOMContentLoaded', function() {
     heroIcon.style.animation = "pulse 1s infinite";
     
     try {
-      console.log('[Popup] Getting active tab...');
       // Get active tab
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      console.log('[Popup] Active tab:', tab.url);
       
       // Check if we can inject (some pages like chrome:// can't be injected)
       if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) {
         throw new Error('Cannot analyze browser system pages');
       }
       
-      console.log('[Popup] Injecting scraper...');
       // Inject scraper script
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ['scraper-bundle.js']
       });
-      console.log('[Popup] Scraper injected');
       
       // Small delay to ensure script executes
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      console.log('[Popup] Getting results...');
       // Get results from injected script
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
-          console.log('[Popup] Checking for results, window.__fraudScraperResult:', window.__fraudScraperResult);
           if (!window.__fraudScraperResult) {
             return { success: false, error: 'Scraper did not run' };
           }
@@ -128,22 +111,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
       
-      console.log('[Popup] Result received:', result);
       const response = result.result;
       
       if (!response) {
         throw new Error('No response from scraper');
       }
       
-      console.log('[Popup] Response:', response);
-      
       if (response.success) {
         const { trustScore, signals } = response;
         
         // Send full JSON data to backend
         const API_URL = "https://fraud-api-993p.onrender.com/scan";
-        console.log("🚀 Sending data to Backend:", API_URL);
-
         fetch(API_URL, {
             method: "POST",
             headers: {
@@ -158,7 +136,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(res => res.json())
         .then(serverData => {
             console.log("✅ Backend Received Data!", serverData);
-            verdict.textContent += " (Saved to Cloud)";
         })
         .catch(err => {
             console.error("❌ Backend Error:", err);
@@ -174,13 +151,13 @@ document.addEventListener('DOMContentLoaded', function() {
         revealDetails(scoreClass);
         
         // Set verdict based on score
+        let verdictText = "High risk of fraudulent content.";
         if(trustScore > 80) {
-          verdict.textContent = "No threats detected on this page.";
+          verdictText = "No threats detected on this page.";
         } else if(trustScore > 50) {
-          verdict.textContent = "Some suspicious elements detected.";
-        } else {
-          verdict.textContent = "High risk of fraudulent content.";
+          verdictText = "Some suspicious elements detected.";
         }
+        verdict.textContent = verdictText + " (Saved to Cloud)";
         verdict.classList.add('show');
         
         // Update domain display

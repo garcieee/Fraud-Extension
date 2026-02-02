@@ -11,11 +11,7 @@ from typing import Any, Dict
 
 
 def _count(value: Any) -> int:
-    if value is None:
-        return 0
-    if isinstance(value, list):
-        return len(value)
-    return 0
+    return len(value) if isinstance(value, list) else 0
 
 
 def _bool(value: Any) -> int:

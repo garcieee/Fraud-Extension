@@ -3,7 +3,8 @@ import json
 import requests
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, Header, Request
+from urllib.parse import urlparse
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -67,9 +68,8 @@ async def process_scan(request: Request):
     
     # Extract domain for filename
     try:
-        from urllib.parse import urlparse
         domain = urlparse(url).netloc.replace('.', '-') or 'unknown'
-    except:
+    except Exception:
         domain = 'unknown'
     
     # Create filename with timestamp
@@ -78,10 +78,11 @@ async def process_scan(request: Request):
     filepath = DATA_FOLDER / filename
     
     # Prepare data to save
+    timestamp_iso = datetime.now().isoformat()
     data_to_save = {
         "url": url,
         "trust_score": trust_score,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": timestamp_iso,
         "signals": signals
     }
     
