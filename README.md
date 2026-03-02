@@ -1,85 +1,63 @@
 # Fraud-Extension
 
-A browser extension that detects fraudulent and malicious content on web pages, with backend processing and storage.
+## Architecture
+
+```text
+backend/
+  ├── main.py       # FastAPI + QStash gateway (DO NOT TOUCH)
+  ├── worker.py     # Orchestrates heuristics + AI + cache
+  ├── heuristics.py # Rule_Score (URL-based heuristics)
+  ├── ai.py         # AI_Score (Hugging Face placeholder)
+  ├── cache.py      # Supabase cache placeholder
+  └── config.py     # API key placeholders
+
+scraper/
+  ├── scraper.js    # Returns { url, text } from current page
+  └── utils.js      # Text cleaning (normalize + trim)
+
+extension/          # Chrome extension UI (DO NOT TOUCH)
+```
 
 ## How It Works
 
-1. **Extension** - Scans pages for fraud signals and calculates trust score
-2. **Backend API** - Receives scan data and queues it via QStash
-3. **Worker** - Processes queued jobs and saves JSON to `backend/data/` folder
+- Extension scrapes the current page and sends `{ url, text }` to `backend/main.py`.
+- `main.py` pushes the job to QStash.
+- QStash calls `backend/worker.py`:
+  - `heuristics.calculate_rule_score(url)` → Rule_Score (0–100)
+  - `ai.analyze_intent(text)` → AI_Score (0–100, **not implemented yet**)
+  - `Final_Score = 0.4 * Rule_Score + 0.6 * AI_Score`
+  - `cache.get_cached_result` / `cache.set_cached_result` are stubs for Supabase.
 
-## Extension Usage
+## Config & API Keys
 
-1. **Load extension:**
-   - Open `chrome://extensions/` or `edge://extensions/`
-   - Enable Developer Mode
-   - Click "Load unpacked" → Select `extension` folder
+Set these **later** in `backend/config.py`:
 
-2. **Use it:**
-   - Navigate to any website
-   - Click extension icon → "Analyze Page"
-   - View trust score and results in popup
-   - Data automatically sent to backend and saved
+- Hugging Face (Zero-shot intent, `facebook/bart-large-mnli`):
+  - `HF_API_URL`
+  - `HF_API_TOKEN`
+- Supabase (24h cache):
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_TABLE`
+- Cache TTL:
+  - `CACHE_TTL_SECONDS` (default `86400`, 24h)
 
-## Backend Setup
+Currently:
+- `ai.analyze_intent` raises `NotImplementedError` (no HF calls yet).
+- `cache.set_cached_result` raises `NotImplementedError`.
+- `cache.get_cached_result` always returns `None` (no cache).
 
-1. **Install dependencies:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
+## How to Use (High Level)
 
-2. **Set environment variables:**
-   Create `.env` file:
-   ```
-   QSTASH_TOKEN=your_qstash_token
-   RENDER_EXTERNAL_URL=https://fraud-api-993p.onrender.com
-   ```
+1. **Extension**  
+   - Load `extension/` as an unpacked extension in Chrome.  
+   - It already knows how to call the backend.
 
-3. **Run backend:**
-   ```bash
-   uvicorn main:app --reload
-   ```
+2. **Backend**  
+   - Run `backend/main.py` with your existing FastAPI/QStash setup.  
+   - QStash should be configured (outside this repo) to invoke `worker.process_job`.
 
-4. **Data storage:**
-   - Scanned data saved to `backend/data/` folder
-   - Files named: `domain_timestamp.json`
-   - Contains: URL, trust score, timestamp, full signals data
-
-## Architecture
-
-**Extension Flow:**
-- User clicks "Analyze Page"
-- Scraper extracts fraud signals
-- Calculates trust score (0-100)
-- Sends JSON to backend API
-
-**Backend Flow:**
-- `/scan` endpoint receives data
-- Queues job via QStash
-- `/process` worker processes job
-- Saves JSON to `data/` folder
-
-## What It Detects
-
-- **Forms & Credentials** - Password fields, credit card inputs, suspicious forms
-- **Brand Impersonation** - Fake brand logos, domain spoofing
-- **Scam Language** - Urgency/threat/reward keywords, grammar anomalies
-- **Technical Issues** - Hidden iframes, redirects, external scripts
-- **Obfuscation** - Disabled right-click, base64 encoding
-- **Layout Deception** - Full-screen overlays, fake browser UI
-
-## Project Structure
-
-```
-extension/
-  ├── manifest.json       # Extension configuration
-  ├── popup.html          # Extension popup UI
-  ├── popup.js            # Popup logic & API calls
-  └── scraper-bundle.js   # Fraud detection scraper
-
-backend/
-  ├── main.py             # FastAPI server with QStash queue
-  ├── requirements.txt    # Python dependencies
-  └── data/               # Saved scan JSON files
-```
+3. **Next Steps**  
+   - Add real Hugging Face logic in `ai.py` once you have `HF_API_TOKEN`.  
+   - Add real Supabase logic in `cache.py` once you have Supabase keys.  
+   - Keep `main.py` and everything under `extension/` unchanged.
