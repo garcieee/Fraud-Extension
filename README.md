@@ -28,24 +28,45 @@ extension/          # Chrome extension UI (DO NOT TOUCH)
   - `Final_Score = 0.4 * Rule_Score + 0.6 * AI_Score`
   - `cache.get_cached_result` / `cache.set_cached_result` are stubs for Supabase.
 
-## Config & API Keys
+## Connect Supabase (Memory Layer + Feedback)
 
-Set these **later** in `backend/config.py`:
+1. **Create a project** at [supabase.com](https://supabase.com) and get:
+   - **Project URL** (e.g. `https://xxxx.supabase.co`)
+   - **Service role key** (Settings → API → `service_role` secret)
 
-- Hugging Face (Zero-shot intent, `facebook/bart-large-mnli`):
-  - `HF_API_URL`
-  - `HF_API_TOKEN`
-- Supabase (24h cache):
-  - `SUPABASE_URL`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `SUPABASE_TABLE`
-- Cache TTL:
-  - `CACHE_TTL_SECONDS` (default `86400`, 24h)
+2. **Create two tables** in the SQL Editor:
 
-Currently:
-- `ai.analyze_intent` raises `NotImplementedError` (no HF calls yet).
-- `cache.set_cached_result` raises `NotImplementedError`.
-- `cache.get_cached_result` always returns `None` (no cache).
+   **Cache (24h TTL):**
+   ```sql
+   create table if not exists fraud_scans (
+     url text primary key,
+     created_at timestamptz default now(),
+     result jsonb
+   );
+   ```
+
+   **Job status (for extension polling):**
+   ```sql
+   create table if not exists scan_jobs (
+     job_id text primary key,
+     status text not null,
+     result jsonb,
+     created_at timestamptz default now()
+   );
+   ```
+
+3. **Set env vars** (e.g. in `.env` or Render):
+   - `SUPABASE_URL` = your project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` = service role key
+   - `SUPABASE_TABLE` = `fraud_scans` (default)
+   - `SUPABASE_JOBS_TABLE` = `scan_jobs` (default)
+
+After this, the backend uses Supabase for cache and for **GET /status/{job_id}**; the extension polls that and shows the **Red / Yellow / Green** shield from the server result.
+
+## Other API Keys
+
+- **Hugging Face:** `HF_API_URL`, `HF_API_TOKEN` (for `ai.py` when ready).
+- **Cache TTL:** `CACHE_TTL_SECONDS` (default `86400`, 24h).
 
 ## How to Use (High Level)
 

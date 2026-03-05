@@ -119,59 +119,95 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (response.success) {
         const { trustScore, signals } = response;
+        const API_BASE = "https://fraud-api-993p.onrender.com";
         
-        // Send full JSON data to backend
-        const API_URL = "https://fraud-api-993p.onrender.com/scan";
-        fetch(API_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                url: tab.url,
-                trust_score: trustScore,
-                signals: signals
-            })
+        fetch(API_BASE + "/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: tab.url,
+            trust_score: trustScore,
+            signals: signals
+          })
         })
         .then(res => res.json())
         .then(serverData => {
-            console.log("✅ Backend Received Data!", serverData);
+          const jobId = serverData.job_id;
+          if (jobId) {
+            pollStatus(API_BASE, jobId, trustScore, signals, tab);
+            return;
+          }
+          showResult(trustScore, signals, tab, true);
         })
-        .catch(err => {
-            console.error("❌ Backend Error:", err);
+        .catch(() => {
+          showResult(trustScore, signals, tab, true);
         });
         
-        heroIcon.style.animation = "none";
-        animateScore(trustScore);
-        
-        let scoreClass = 'text-danger';
-        if(trustScore > 80) scoreClass = 'text-safe';
-        else if(trustScore > 50) scoreClass = 'text-warning';
-
-        revealDetails(scoreClass);
-        
-        // Set verdict based on score
-        let verdictText = "High risk of fraudulent content.";
-        if(trustScore > 80) {
-          verdictText = "No threats detected on this page.";
-        } else if(trustScore > 50) {
-          verdictText = "Some suspicious elements detected.";
+        function pollStatus(base, jobId, fallbackScore, fallbackSignals, tab) {
+          const interval = setInterval(async () => {
+            try {
+              const r = await fetch(base + "/status/" + jobId);
+              if (!r.ok) return;
+              const data = await r.json();
+              if (data.status === "completed" && data.result) {
+                clearInterval(interval);
+                heroIcon.style.animation = "none";
+                showResultFromServer(data.result, fallbackSignals, tab);
+              }
+            } catch (e) {}
+          }, 2000);
+          setTimeout(() => clearInterval(interval), 60000);
         }
-        verdict.textContent = verdictText + " (Saved to Cloud)";
-        verdict.classList.add('show');
         
-        // Update domain display
-        domainVal.textContent = signals.page_identity.domain || "Unknown";
+        function showResultFromServer(result, signals, tab) {
+          const riskScore = Number(result.final_score);
+          const trustDisplay = Math.round(100 - riskScore);
+          animateScore(trustDisplay);
+          if (riskScore >= 75) scoreCircle.style.stroke = "#ef4444";
+          else if (riskScore >= 40) scoreCircle.style.stroke = "#f59e0b";
+          else scoreCircle.style.stroke = "#10b981";
+          let scoreClass = "text-safe";
+          let verdictText = "Safe.";
+          if (riskScore >= 75) {
+            scoreClass = "text-danger";
+            verdictText = "High Risk: Phishing Detected.";
+          } else if (riskScore >= 40) {
+            scoreClass = "text-warning";
+            verdictText = "Warning: Suspicious content.";
+          } else {
+            verdictText = "Safe.";
+          }
+          revealDetails(scoreClass);
+          verdict.textContent = verdictText;
+          verdict.classList.add("show");
+          domainVal.textContent = (signals && signals.page_identity && signals.page_identity.domain) ? signals.page_identity.domain : "Unknown";
+          sslVal.textContent = tab.url.startsWith("https://") ? "Encrypted (Secure)" : "Not Encrypted";
+          scanButton.disabled = false;
+          scanButton.textContent = "RESET";
+          scanButton.className = "btn-reset";
+          isScanned = true;
+        }
         
-        // Check SSL
-        const isSecure = tab.url.startsWith('https://');
-        sslVal.textContent = isSecure ? "Encrypted (Secure)" : "Not Encrypted";
-        
-        scanButton.disabled = false;
-        scanButton.textContent = "RESET";
-        scanButton.className = 'btn-reset';
-        
-        isScanned = true;
+        function showResult(trustScore, signals, tab, done) {
+          if (!done) return;
+          heroIcon.style.animation = "none";
+          animateScore(trustScore);
+          let scoreClass = "text-danger";
+          if (trustScore > 80) scoreClass = "text-safe";
+          else if (trustScore > 50) scoreClass = "text-warning";
+          revealDetails(scoreClass);
+          let verdictText = "High risk of fraudulent content.";
+          if (trustScore > 80) verdictText = "No threats detected on this page.";
+          else if (trustScore > 50) verdictText = "Some suspicious elements detected.";
+          verdict.textContent = verdictText + " (Saved to Cloud)";
+          verdict.classList.add("show");
+          domainVal.textContent = signals.page_identity && signals.page_identity.domain ? signals.page_identity.domain : "Unknown";
+          sslVal.textContent = tab.url.startsWith("https://") ? "Encrypted (Secure)" : "Not Encrypted";
+          scanButton.disabled = false;
+          scanButton.textContent = "RESET";
+          scanButton.className = "btn-reset";
+          isScanned = true;
+        }
       } else {
         throw new Error(response.error || 'Scan failed');
       }
