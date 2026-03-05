@@ -11,8 +11,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from cache import get_job_result, set_job_completed
+from worker import process_job as worker_process_job
 
 load_dotenv()
+
+
+def _text_from_signals(signals: dict) -> str:
+    """Build text for BART from signals (extension does not send raw body text)."""
+    if not signals:
+        return ""
+    parts = []
+    pi = signals.get("page_identity") or {}
+    parts.append(pi.get("title") or "")
+    parts.append(pi.get("meta_description") or "")
+    tc = signals.get("textual_scam_language") or {}
+    for key in ("urgency_keywords_found", "threat_keywords_found", "reward_keywords_found"):
+        for w in (tc.get(key) or []):
+            parts.append(w)
+    return " ".join(str(p).strip() for p in parts if p).strip() or ""
 
 app = FastAPI()
 
@@ -108,9 +124,19 @@ async def process_scan(request: Request):
         print(f"❌ Error saving file: {e}")
         return {"status": "error", "message": str(e)}
 
-    # Memory layer: save job result for feedback (GET /status/{job_id})
-    result = {"url": url, "trust_score": trust_score, "final_score": trust_score}
+    # Hybrid scoring: heuristics + BART (worker); fallback to extension trust_score on error
+    text = body.get("text") or body.get("text_content") or _text_from_signals(signals)
+    try:
+        hybrid = worker_process_job({"url": url, "text": text})
+        result = {
+            "url": url,
+            "trust_score": trust_score,
+            "rule_score": hybrid.get("rule_score"),
+            "ai_score": hybrid.get("ai_score"),
+            "final_score": hybrid.get("final_score"),
+        }
+    except Exception:
+        result = {"url": url, "trust_score": trust_score, "final_score": trust_score}
     if job_id:
         set_job_completed(job_id, result)
-    
     return {"status": "processed", "file": filename}

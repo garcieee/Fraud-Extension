@@ -13,8 +13,7 @@ from config import HF_API_URL, HF_API_TOKEN
 
 logger = logging.getLogger(__name__)
 
-API_URL = HF_API_URL or "https://router.huggingface.co/hf-inference/models/facebook/bart-large-mnli"
-HF_API_TOKEN = "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"
+API_URL = HF_API_URL or "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
 
 CANDIDATE_LABELS = [
     "urgent action",
@@ -32,7 +31,7 @@ def analyze_intent(text: str) -> float:
     if not text or not text.strip():
         return 0.0
 
-    if not HF_API_TOKEN:
+    if not (HF_API_TOKEN or "").strip():
         logger.error("Missing Hugging Face API Token.")
         return 0.0
 
