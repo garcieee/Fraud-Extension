@@ -25,8 +25,7 @@
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         margin: 0;
         padding: 0;
-        overflow: hidden; 
-        height: 100vh;
+        overflow-x: hidden;
       }
 
       header {
@@ -259,6 +258,63 @@
         from { opacity: 0; transform: translateY(5px); }
         to { opacity: 1; transform: translateY(0); }
       }
+
+      .section-label {
+        font-size: 10px;
+        color: var(--text-sub);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+        margin-top: 4px;
+      }
+
+      #flags-section {
+        display: none;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+        margin-top: 4px;
+        animation: fadeIn 0.4s ease;
+      }
+
+      .flag-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+      }
+
+      .flag-label {
+        color: var(--text-sub);
+        font-size: 12px;
+        flex: 1;
+        padding-right: 8px;
+      }
+
+      .flag-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+      }
+
+      .flag-badge.flagged {
+        background: rgba(239, 68, 68, 0.12);
+        color: var(--danger);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+      }
+
+      .flag-badge.clear {
+        background: rgba(16, 185, 129, 0.12);
+        color: var(--safe);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+      }
+
+      .flag-badge.warn {
+        background: rgba(245, 158, 11, 0.12);
+        color: var(--warning);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
     </style>
   </head>
   <body>
@@ -319,6 +375,11 @@
           <div class="info-icon" data-tooltip="SSL Encryption status.">i</div>
         </div>
         <span class="detail-value blur-text" id="ssl-val">Unknown</span>
+      </div>
+
+      <div id="flags-section">
+        <div class="section-label">Risk Signals</div>
+        <div id="flags-list"></div>
       </div>
     </div>
 

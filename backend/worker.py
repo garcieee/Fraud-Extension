@@ -11,7 +11,7 @@ Formula:
 import logging
 from typing import Any, Dict
 
-from heuristics import calculate_rule_score
+from heuristics import calculate_rule_score, get_url_flags
 from ai import analyze_intent
 from cache import get_cached_result, set_cached_result
 
@@ -29,6 +29,7 @@ def process_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         return cached
 
     rule_score = calculate_rule_score(url)
+    url_flags = get_url_flags(url)
 
     ai_score = analyze_intent(text)  # float or None
     ai_available = ai_score is not None
@@ -47,6 +48,7 @@ def process_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         "ai_score": float(ai_score),
         "final_score": float(final_score),
         "ai_available": ai_available,
+        "flags": url_flags,
     }
 
     try:

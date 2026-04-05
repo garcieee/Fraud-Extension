@@ -37,31 +37,34 @@ def _uses_ip_address(host: str) -> bool:
         return False
 
 
+def get_url_flags(url: str) -> dict:
+    """Return a dict of individual heuristic flags for the given URL."""
+    url = url or ""
+    host = _extract_host(url) or ""
+    return {
+        "ip_address": _uses_ip_address(host),
+        "long_url": len(url) > 75,
+        "no_https": not url.lower().startswith("https://"),
+        "suspicious_chars": "@" in url or host.count("-") >= 3,
+    }
+
+
 def calculate_rule_score(url: str) -> float:
     """
     Compute Rule_Score in the range [0, 100].
 
     This is intentionally simple and deterministic so it can run on every request.
     """
-    url = url or ""
-    host = _extract_host(url) or ""
+    flags = get_url_flags(url)
 
     score = 0
-
-    # IP address usage
-    if _uses_ip_address(host):
+    if flags["ip_address"]:
         score += 100
-
-    # URL length > 75 chars
-    if len(url) > 75:
+    if flags["long_url"]:
         score += 20
-
-    # Protocol not HTTPS
-    if not url.lower().startswith("https://"):
+    if flags["no_https"]:
         score += 30
-
-    # Suspicious symbols: '@' anywhere or many hyphens in host
-    if "@" in url or host.count("-") >= 3:
+    if flags["suspicious_chars"]:
         score += 20
 
     return float(min(100, score))
