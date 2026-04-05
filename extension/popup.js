@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Build a list of flag items from signals + server URL flags
   // Thresholds are intentionally strict to avoid false positives
-  function buildFlagItems(signals, urlFlags, tabUrl) {
+  function buildFlagItems(signals, urlFlags, tabUrl, serverResult) {
     const items = [];
     const isHttps = tabUrl.startsWith('https://');
 
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
       else if (forms.has_password_field)
         items.push({ label: 'Password Field', cls: 'warn', text: '⚠ Present' });
       if (forms.suspicious_input_names && forms.suspicious_input_names.length > 0)
-        items.push({ label: 'Suspicious Inputs', cls: 'flagged', text: `✗ ${forms.suspicious_input_names.length} Found` });
+        items.push({ label: 'Suspicious Inputs', cls: 'flagged', text: `✗ ${forms.suspicious_input_names.length} Found`, detail: forms.suspicious_input_names.join(', ') });
     }
 
     const brand = signals.brand_impersonation;
@@ -105,17 +105,17 @@ document.addEventListener('DOMContentLoaded', function() {
       // Require 3+ urgency keywords to reduce noise ("immediate", "now" appear on normal pages)
       const urgency = scam.urgency_keywords_found ? scam.urgency_keywords_found.length : 0;
       if (urgency >= 3)
-        items.push({ label: 'Urgency Language', cls: 'flagged', text: `✗ ${urgency} Keywords` });
+        items.push({ label: 'Urgency Language', cls: 'flagged', text: `✗ ${urgency} Keywords`, detail: scam.urgency_keywords_found.join(', ') });
 
       // Require 2+ threat keywords — "legal" alone is too common
       const threat = scam.threat_keywords_found ? scam.threat_keywords_found.length : 0;
       if (threat >= 2)
-        items.push({ label: 'Threat Language', cls: 'flagged', text: `✗ ${threat} Keywords` });
+        items.push({ label: 'Threat Language', cls: 'flagged', text: `✗ ${threat} Keywords`, detail: scam.threat_keywords_found.join(', ') });
 
       // Reward language is low-signal; only flag at 3+
       const reward = scam.reward_keywords_found ? scam.reward_keywords_found.length : 0;
       if (reward >= 3)
-        items.push({ label: 'Reward / Prize Language', cls: 'warn', text: `⚠ ${reward} Keywords` });
+        items.push({ label: 'Reward / Prize Language', cls: 'warn', text: `⚠ ${reward} Keywords`, detail: scam.reward_keywords_found.join(', ') });
     }
 
     const tech = signals.technical_structural;
@@ -141,6 +141,15 @@ document.addEventListener('DOMContentLoaded', function() {
         items.push({ label: 'Fake Browser UI', cls: 'flagged', text: '✗ Detected' });
     }
 
+    // AI model score — show when it's the primary reason for a warning/danger
+    if (serverResult && serverResult.ai_available) {
+      const aiScore = Number(serverResult.ai_score || 0);
+      if (aiScore >= 60)
+        items.push({ label: 'AI Content Analysis', cls: 'flagged', text: `✗ ${Math.round(aiScore)}% Risk`, detail: 'Page text matches patterns seen in scam or phishing content' });
+      else if (aiScore >= 30)
+        items.push({ label: 'AI Content Analysis', cls: 'warn', text: `⚠ ${Math.round(aiScore)}% Risk`, detail: 'Some content patterns flagged as potentially deceptive' });
+    }
+
     return items;
   }
 
@@ -151,25 +160,68 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!flagsList || !flagsSection) return;
 
     flagsList.innerHTML = '';
-    const hasIssues = items.some(i => i.cls !== 'clear');
 
-    if (!hasIssues) {
+    const issues  = items.filter(i => i.cls !== 'clear');
+    const passed  = items.filter(i => i.cls === 'clear');
+
+    if (issues.length === 0) {
+      // Nothing wrong — show a clean state
       const row = document.createElement('div');
       row.className = 'flag-row';
       row.innerHTML = `<span class="flag-label">All checks passed</span><span class="flag-badge clear">✓ Clean</span>`;
       flagsList.appendChild(row);
     } else {
-      // HTTPS first, then all non-clear items
-      const sorted = [
-        ...items.filter(i => i.label === 'HTTPS Protocol'),
-        ...items.filter(i => i.cls !== 'clear' && i.label !== 'HTTPS Protocol')
-      ];
-      sorted.forEach(item => {
+      // ── Issue count header ──────────────────────────────────
+      const countEl = document.createElement('div');
+      countEl.className = 'issues-header';
+      const danger  = issues.filter(i => i.cls === 'flagged').length;
+      const warn    = issues.filter(i => i.cls === 'warn').length;
+      const countClass = danger > 0 ? 'danger' : 'warn';
+      countEl.innerHTML = `
+        <span class="issues-count ${countClass}">
+          ${danger > 0 ? `✗ ${danger} problem${danger > 1 ? 's' : ''}` : ''}
+          ${warn   > 0 ? `  ⚠ ${warn} warning${warn   > 1 ? 's' : ''}` : ''}
+        </span>`;
+      flagsList.appendChild(countEl);
+
+      // ── Issues — prominent rows ─────────────────────────────
+      issues.forEach(item => {
         const row = document.createElement('div');
-        row.className = 'flag-row';
-        row.innerHTML = `<span class="flag-label">${item.label}</span><span class="flag-badge ${item.cls}">${item.text}</span>`;
+        row.className = `issue-row issue-row--${item.cls}`;
+        row.innerHTML = `
+          <div class="issue-icon">${item.cls === 'flagged' ? '✗' : '⚠'}</div>
+          <div class="issue-body">
+            <span class="issue-label">${item.label}</span>
+            ${item.detail ? `<span class="issue-detail">${item.detail}</span>` : ''}
+          </div>
+          <span class="flag-badge ${item.cls}">${item.text}</span>`;
         flagsList.appendChild(row);
       });
+
+      // ── Passed checks — collapsible ─────────────────────────
+      if (passed.length > 0) {
+        const toggle = document.createElement('button');
+        toggle.className = 'passed-toggle';
+        toggle.textContent = `▸ ${passed.length} check${passed.length > 1 ? 's' : ''} passed`;
+        flagsList.appendChild(toggle);
+
+        const passedList = document.createElement('div');
+        passedList.className = 'passed-list hidden';
+        passed.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'flag-row';
+          row.innerHTML = `<span class="flag-label">${item.label}</span><span class="flag-badge clear">${item.text}</span>`;
+          passedList.appendChild(row);
+        });
+        flagsList.appendChild(passedList);
+
+        toggle.addEventListener('click', () => {
+          const isHidden = passedList.classList.toggle('hidden');
+          toggle.textContent = isHidden
+            ? `▸ ${passed.length} check${passed.length > 1 ? 's' : ''} passed`
+            : `▾ ${passed.length} check${passed.length > 1 ? 's' : ''} passed`;
+        });
+      }
     }
 
     flagsSection.style.display = 'block';
@@ -177,10 +229,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Inject a floating banner directly on the page using Shadow DOM
   function injectPageBanner(tab, trustScore, verdictText, verdictClass, items) {
-    const bannerItems = [
-      ...items.filter(i => i.label === 'HTTPS Protocol'),
-      ...items.filter(i => i.cls !== 'clear' && i.label !== 'HTTPS Protocol')
-    ];
+    // Banner only shows issues — passing checks add noise
+    const bannerItems = items.filter(i => i.cls !== 'clear');
 
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -282,6 +332,48 @@ document.addEventListener('DOMContentLoaded', function() {
             color: #9ca3af;
             flex: 1;
           }
+          .issue-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            margin: 3px 0;
+          }
+          .issue-row--flagged {
+            background: rgba(239,68,68,0.10);
+            border: 1px solid rgba(239,68,68,0.20);
+          }
+          .issue-row--warn {
+            background: rgba(245,158,11,0.10);
+            border: 1px solid rgba(245,158,11,0.20);
+          }
+          .issue-icon {
+            font-size: 11px;
+            font-weight: 700;
+            margin-top: 1px;
+            flex-shrink: 0;
+          }
+          .issue-row--flagged .issue-icon { color: #ef4444; }
+          .issue-row--warn    .issue-icon { color: #f59e0b; }
+          .issue-body {
+            flex: 1;
+            min-width: 0;
+          }
+          .issue-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #e5e7eb;
+          }
+          .issue-detail {
+            display: block;
+            font-size: 10px;
+            color: #9ca3af;
+            font-style: italic;
+            margin-top: 2px;
+            word-break: break-word;
+          }
           .badge {
             font-size: 10px;
             font-weight: 600;
@@ -340,13 +432,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
           data.flags.forEach(flag => {
             const row = document.createElement('div');
-            row.className = 'flag-row';
+            row.className = `issue-row issue-row--${flag.cls}`;
             row.innerHTML = `
-              <span class="flag-label">${flag.label}</span>
+              <div class="issue-icon">${flag.cls === 'flagged' ? '✗' : '⚠'}</div>
+              <div class="issue-body">
+                <span class="issue-label">${flag.label}</span>
+                ${flag.detail ? `<span class="issue-detail">${flag.detail}</span>` : ''}
+              </div>
               <span class="badge ${flag.cls}">${flag.text}</span>
             `;
             panel.appendChild(row);
           });
+
+          if (data.flags.length === 0) {
+            const row = document.createElement('div');
+            row.className = 'flag-row';
+            row.innerHTML = `<span class="flag-label" style="color:#6b7280">All checks passed</span><span class="badge clear">✓ Clean</span>`;
+            panel.appendChild(row);
+          }
         }
 
         shadow.appendChild(style);
@@ -498,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
           domainVal.textContent = (signals && signals.page_identity && signals.page_identity.domain) || "Unknown";
           sslVal.textContent = isHttps ? "Encrypted (Secure)" : "Not Encrypted";
 
-          const items = buildFlagItems(signals, result.flags || null, tab.url);
+          const items = buildFlagItems(signals, result.flags || null, tab.url, result);
           renderFlagItems(items);
           injectPageBanner(tab, trustDisplay, verdictText, verdictClass, items);
 

@@ -1,84 +1,60 @@
-# Fraud-Extension
+# Fraud Detector — Chrome Extension
 
-## Architecture
+A browser extension that scans any webpage for signs of fraud, phishing, or scam content and gives you a plain-English verdict in seconds.
 
-```text
-backend/
-  ├── main.py       # FastAPI + QStash gateway (DO NOT TOUCH)
-  ├── worker.py     # Orchestrates heuristics + AI + cache
-  ├── heuristics.py # Rule_Score (URL-based heuristics)
-  ├── ai.py         # AI_Score (Hugging Face placeholder)
-  ├── cache.py      # Supabase cache placeholder
-  └── config.py     # API key placeholders
+---
 
-scraper/
-  ├── scraper.js    # Returns { url, text } from current page
-  └── utils.js      # Text cleaning (normalize + trim)
+## What It Does
 
-extension/          # Chrome extension UI (DO NOT TOUCH)
-```
+When you click **Analyze Page**, the extension:
+1. Scans the current page for suspicious content
+2. Checks the URL and connection for red flags
+3. Sends the data to a backend that runs heuristic rules + an AI model
+4. Shows you a **Trust Score (0–100)** and a breakdown of anything suspicious
 
-## How It Works
+A floating banner also appears on the page itself so you don't have to keep the popup open.
 
-- Extension scrapes the current page and sends `{ url, text }` to `backend/main.py`.
-- `main.py` pushes the job to QStash.
-- QStash calls `backend/worker.py`:
-  - `heuristics.calculate_rule_score(url)` → Rule_Score (0–100)
-  - `ai.analyze_intent(text)` → AI_Score (0–100, **not implemented yet**)
-  - `Final_Score = 0.4 * Rule_Score + 0.6 * AI_Score`
-  - `cache.get_cached_result` / `cache.set_cached_result` are stubs for Supabase.
+---
 
-## Connect Supabase (Memory Layer + Feedback)
+## How to Read the Results
 
-1. **Create a project** at [supabase.com](https://supabase.com) and get:
-   - **Project URL** (e.g. `https://xxxx.supabase.co`)
-   - **Service role key** (Settings → API → `service_role` secret)
+| Score | Meaning |
+|-------|---------|
+| **80–100** | No threats detected — looks safe |
+| **50–79** | Warning — some suspicious elements found |
+| **0–49** | High risk — likely phishing or scam |
 
-2. **Create two tables** in the SQL Editor:
+The **Risk Signals** section tells you exactly what was flagged:
 
-   **Cache (24h TTL):**
-   ```sql
-   create table if not exists fraud_scans (
-     url text primary key,
-     created_at timestamptz default now(),
-     result jsonb
-   );
-   ```
+- **HTTPS Protocol** — whether the connection is encrypted
+- **Raw IP in URL** — legitimate sites use domain names, not IPs
+- **URL Length** — unusually long URLs are a common phishing trick
+- **Payment + Password Form** — a page asking for both is a major red flag
+- **Brand Impersonation** — domain mimicking a known brand (e.g. `paypa1.com`)
+- **Urgency / Threat / Reward Language** — scam keywords detected, with the specific words shown
+- **Hidden Iframes** — invisible frames that can steal data
+- **Right-Click Disabled** — sites that block right-click often have something to hide
+- **Fullscreen Overlay / Fake Browser UI** — tricks used to make fake pages look real
 
-   **Job status (for extension polling):**
-   ```sql
-   create table if not exists scan_jobs (
-     job_id text primary key,
-     status text not null,
-     result jsonb,
-     created_at timestamptz default now()
-   );
-   ```
+---
 
-3. **Set env vars** (e.g. in `.env` or Render):
-   - `SUPABASE_URL` = your project URL
-   - `SUPABASE_SERVICE_ROLE_KEY` = service role key
-   - `SUPABASE_TABLE` = `fraud_scans` (default)
-   - `SUPABASE_JOBS_TABLE` = `scan_jobs` (default)
+## Installation
 
-After this, the backend uses Supabase for cache and for **GET /status/{job_id}**; the extension polls that and shows the **Red / Yellow / Green** shield from the server result.
+1. Download or clone this repo
+2. Open Chrome and go to `chrome://extensions`
+3. Enable **Developer mode** (top right)
+4. Click **Load unpacked** and select the `extension/` folder
+5. The shield icon will appear in your toolbar — pin it for easy access
 
-## Other API Keys
+---
 
-- **Hugging Face:** `HF_API_URL`, `HF_API_TOKEN` (for `ai.py` when ready).
-- **Cache TTL:** `CACHE_TTL_SECONDS` (default `86400`, 24h).
+## Usage
 
-## How to Use (High Level)
+1. Navigate to any website
+2. Click the 🛡️ shield icon in your toolbar
+3. Click **Analyze Page**
+4. Wait a few seconds for the scan to complete
+5. Review the Trust Score and flagged signals
+6. Click **RESET** to clear and scan again
 
-1. **Extension**  
-   - Load `extension/` as an unpacked extension in Chrome.  
-   - It already knows how to call the backend.
-
-2. **Backend**  
-   - Run `backend/main.py` with your existing FastAPI/QStash setup.  
-   - QStash should be configured (outside this repo) to invoke `worker.process_job`.
-
-3. **Next Steps**  
-   - Add real Hugging Face logic in `ai.py` once you have `HF_API_TOKEN`.  
-   - Add real Supabase logic in `cache.py` once you have Supabase keys.  
-   - Keep `main.py` and everything under `extension/` unchanged.
+> The floating banner on the page can be dismissed with the **×** button.

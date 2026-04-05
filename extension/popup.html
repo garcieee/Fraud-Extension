@@ -290,6 +290,81 @@
         padding-right: 8px;
       }
 
+      /* Issue rows — prominent colored cards for problems */
+      .issue-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        margin: 4px 0;
+      }
+      .issue-row--flagged {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.22);
+      }
+      .issue-row--warn {
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.22);
+      }
+      .issue-icon {
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 1px;
+        flex-shrink: 0;
+      }
+      .issue-row--flagged .issue-icon { color: var(--danger); }
+      .issue-row--warn    .issue-icon { color: var(--warning); }
+      .issue-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .issue-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+      .issue-detail {
+        display: block;
+        font-size: 10px;
+        color: var(--text-sub);
+        font-style: italic;
+        margin-top: 2px;
+        word-break: break-word;
+      }
+
+      /* Issue count header */
+      .issues-header { margin-bottom: 4px; }
+      .issues-count {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .issues-count.danger  { color: var(--danger); }
+      .issues-count.warn    { color: var(--warning); }
+
+      /* Collapsible passed checks */
+      .passed-toggle {
+        all: unset;
+        cursor: pointer;
+        font-size: 10px;
+        color: #52525b;
+        margin-top: 8px;
+        display: block;
+        padding: 2px 0;
+        width: auto;
+        letter-spacing: 0;
+        text-transform: none;
+        font-weight: 400;
+        box-shadow: none;
+        border-radius: 0;
+      }
+      .passed-toggle:hover { color: var(--text-sub); }
+      .passed-list { margin-top: 4px; }
+      .passed-list.hidden { display: none; }
+
       .flag-badge {
         font-size: 10px;
         font-weight: 600;
@@ -378,7 +453,7 @@
       </div>
 
       <div id="flags-section">
-        <div class="section-label">Risk Signals</div>
+        <div class="section-label" id="flags-section-label">Risk Signals</div>
         <div id="flags-list"></div>
       </div>
     </div>
