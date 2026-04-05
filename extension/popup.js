@@ -118,16 +118,17 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       if (response.success) {
-        const { trustScore, signals } = response;
+        const { trustScore, signals, pageText } = response;
         const API_BASE = "https://fraud-api-993p.onrender.com";
-        
+
         fetch(API_BASE + "/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             url: tab.url,
             trust_score: trustScore,
-            signals: signals
+            signals: signals,
+            text: pageText || ""
           })
         })
         .then(res => res.json())
@@ -144,7 +145,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         function pollStatus(base, jobId, fallbackScore, fallbackSignals, tab) {
+          let elapsed = 0;
           const interval = setInterval(async () => {
+            elapsed += 2;
+            scanButton.textContent = `Analyzing... (${elapsed}s)`;
             try {
               const r = await fetch(base + "/status/" + jobId);
               if (!r.ok) return;
@@ -156,7 +160,14 @@ document.addEventListener('DOMContentLoaded', function() {
               }
             } catch (e) {}
           }, 2000);
-          setTimeout(() => clearInterval(interval), 60000);
+          // After 45s fall back to local score rather than leaving user hanging
+          setTimeout(() => {
+            clearInterval(interval);
+            if (!isScanned) {
+              heroIcon.style.animation = "none";
+              showResult(fallbackScore, fallbackSignals, tab, true);
+            }
+          }, 45000);
         }
         
         function showResultFromServer(result, signals, tab) {
@@ -199,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
           let verdictText = "High risk of fraudulent content.";
           if (trustScore > 80) verdictText = "No threats detected on this page.";
           else if (trustScore > 50) verdictText = "Some suspicious elements detected.";
-          verdict.textContent = verdictText + " (Saved to Cloud)";
+          verdict.textContent = verdictText;
           verdict.classList.add("show");
           domainVal.textContent = signals.page_identity && signals.page_identity.domain ? signals.page_identity.domain : "Unknown";
           sslVal.textContent = tab.url.startsWith("https://") ? "Encrypted (Secure)" : "Not Encrypted";

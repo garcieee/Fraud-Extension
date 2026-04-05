@@ -203,14 +203,25 @@
     return Math.max(0, Math.min(100, score));
   }
 
+  function getPageText() {
+    try {
+      const raw = document.body.innerText || document.body.textContent || "";
+      // Collapse excess whitespace and trim to 2000 chars for BART
+      return raw.replace(/\s+/g, " ").trim().slice(0, 2000);
+    } catch (e) {
+      return "";
+    }
+  }
+
   // Auto-run and store results (wait for page to be ready)
   function runScraper() {
     try {
       console.log('[Fraud Scraper] Starting analysis...');
       const signals = extractPageSignals();
       const trustScore = calculateTrustScore(signals);
+      const pageText = getPageText();
       console.log('[Fraud Scraper] Analysis complete. Score:', trustScore);
-      window.__fraudScraperResult = { success: true, signals, trustScore };
+      window.__fraudScraperResult = { success: true, signals, trustScore, pageText };
     } catch (error) {
       console.error('[Fraud Scraper] Error:', error);
       window.__fraudScraperResult = { success: false, error: error.message };
