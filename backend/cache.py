@@ -50,7 +50,7 @@ def get_cached_result(url: str) -> Optional[Dict[str, Any]]:
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
             params={"url": f"eq.{url}", "select": "created_at,result"},
             headers=_headers(),
-            timeout=10,
+            timeout=3,
         )
         r.raise_for_status()
         rows = r.json()
@@ -88,7 +88,7 @@ def set_cached_result(url: str, result: Dict[str, Any]) -> None:
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
             headers={**_headers(), "Prefer": "resolution=merge-duplicates"},
             json=payload,
-            timeout=10,
+            timeout=3,
         )
     except Exception:
         pass
@@ -110,7 +110,7 @@ def get_job_result(job_id: str) -> Optional[Dict[str, Any]]:
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_JOBS_TABLE}",
             params={"job_id": f"eq.{job_id}", "select": "status,result,created_at"},
             headers={**_headers(), "Accept": "application/json"},
-            timeout=10,
+            timeout=3,
         )
         r.raise_for_status()
         rows = r.json()
@@ -143,7 +143,7 @@ def set_job_completed(job_id: str, result: Dict[str, Any]) -> None:
             f"{SUPABASE_URL}/rest/v1/{SUPABASE_JOBS_TABLE}",
             headers={**_headers(), "Prefer": "resolution=merge-duplicates"},
             json=payload,
-            timeout=10,
+            timeout=3,
         )
     except Exception:
         pass

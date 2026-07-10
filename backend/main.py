@@ -1,11 +1,13 @@
 import os
 import uuid
+import threading
 import requests
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+from ai import warmup as ai_warmup
 from cache import get_job_result, set_job_completed
 from worker import process_job as worker_process_job
 
@@ -51,6 +53,13 @@ def home():
     return {"status": "Online"}
 
 
+@app.get("/health")
+def health():
+    """Keep-alive endpoint: keeps Render warm and pings HF to keep the model resident."""
+    threading.Thread(target=ai_warmup, daemon=True).start()
+    return {"status": "ok"}
+
+
 @app.get("/status/{job_id}")
 def status_job(job_id: str):
     out = get_job_result(job_id)
@@ -78,8 +87,9 @@ def receive_scan(data: ScanRequest):
         except Exception as e:
             print(f"❌ QStash failed: {e}")
     else:
-        # No QStash — run synchronously so the extension can poll immediately
-        _run_job(payload)
+        # No QStash — run synchronously and return the result inline (no polling needed)
+        result = _run_job(payload)
+        return {"status": "completed", "job_id": job_id, "result": result}
 
     return {"status": "queued", "message": "Analysis started", "job_id": job_id}
 
@@ -91,8 +101,8 @@ async def process_scan(request: Request):
     return {"status": "processed"}
 
 
-def _run_job(payload: dict):
-    """Core processing logic shared by sync and async paths."""
+def _run_job(payload: dict) -> dict:
+    """Core processing logic shared by sync and async paths. Returns the result dict."""
     job_id = payload.get("job_id")
     url = payload.get("url", "unknown")
     trust_score = payload.get("trust_score", 0)
@@ -112,6 +122,7 @@ def _run_job(payload: dict):
             "ai_score": hybrid.get("ai_score"),
             "final_score": hybrid.get("final_score"),
             "ai_available": hybrid.get("ai_available", False),
+            "flags": hybrid.get("flags"),
         }
     except Exception as e:
         print(f"❌ Worker error: {e}")
@@ -119,3 +130,5 @@ def _run_job(payload: dict):
 
     if job_id:
         set_job_completed(job_id, result)
+
+    return result

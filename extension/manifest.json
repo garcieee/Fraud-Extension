@@ -3,7 +3,7 @@
   "name": "Fraud Detector",
   "version": "1.0",
   "description": "Real-time fraud analysis.",
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

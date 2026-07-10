@@ -22,6 +22,28 @@ document.addEventListener('DOMContentLoaded', function() {
   let isScanned = false;
   let scannedTabId = null;
 
+  // ── Scrape / export ─────────────────────────────────────────
+  const scrapeBtn = document.getElementById('scrapeBtn');
+  let lastScanData = null;
+
+  function showScrapeButton() {
+    if (scrapeBtn && lastScanData) scrapeBtn.style.display = 'block';
+  }
+
+  if (scrapeBtn) {
+    scrapeBtn.addEventListener('click', () => {
+      if (!lastScanData) return;
+      const blob = new Blob([JSON.stringify(lastScanData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      let domain = 'page';
+      try { domain = new URL(lastScanData.url).hostname; } catch (_) {}
+      a.download = `scrape-${domain}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
   function animateScore(targetScore) {
     heroIcon.style.display = 'none';
     scoreWrap.style.display = 'block';
@@ -89,39 +111,47 @@ document.addEventListener('DOMContentLoaded', function() {
     const forms = signals.forms_and_credentials;
     if (forms) {
       if (forms.has_password_field && forms.has_credit_card_field)
-        items.push({ label: 'Payment + Password Form', cls: 'flagged', text: '✗ Both Present' });
+        items.push({ label: 'Payment + Password Form', cls: 'flagged', text: '✗ Both Present',
+          loc: { type: 'selector', values: [...(forms.password_field_selectors || []), ...(forms.credit_card_field_selectors || [])] } });
       else if (forms.has_password_field)
-        items.push({ label: 'Password Field', cls: 'warn', text: '⚠ Present' });
+        items.push({ label: 'Password Field', cls: 'warn', text: '⚠ Present',
+          loc: { type: 'selector', values: forms.password_field_selectors || [] } });
       if (forms.suspicious_input_names && forms.suspicious_input_names.length > 0)
-        items.push({ label: 'Suspicious Inputs', cls: 'flagged', text: `✗ ${forms.suspicious_input_names.length} Found`, detail: forms.suspicious_input_names.join(', ') });
+        items.push({ label: 'Suspicious Inputs', cls: 'flagged', text: `✗ ${forms.suspicious_input_names.length} Found`, detail: forms.suspicious_input_names.join(', '),
+          loc: { type: 'selector', values: forms.suspicious_input_selectors || [] } });
     }
 
     const brand = signals.brand_impersonation;
     if (brand && brand.domain_looks_like_brand)
-      items.push({ label: 'Brand Impersonation', cls: 'flagged', text: '✗ Domain Mimics a Brand' });
+      items.push({ label: 'Brand Impersonation', cls: 'flagged', text: '✗ Domain Mimics a Brand',
+        loc: { type: 'selector', values: brand.brand_logo_selectors || [] } });
 
     const scam = signals.textual_scam_language;
     if (scam) {
       // Require 3+ urgency keywords to reduce noise ("immediate", "now" appear on normal pages)
       const urgency = scam.urgency_keywords_found ? scam.urgency_keywords_found.length : 0;
       if (urgency >= 3)
-        items.push({ label: 'Urgency Language', cls: 'flagged', text: `✗ ${urgency} Keywords`, detail: scam.urgency_keywords_found.join(', ') });
+        items.push({ label: 'Urgency Language', cls: 'flagged', text: `✗ ${urgency} Keywords`, detail: scam.urgency_keywords_found.join(', '),
+          loc: { type: 'text', values: scam.urgency_keywords_found } });
 
       // Require 2+ threat keywords — "legal" alone is too common
       const threat = scam.threat_keywords_found ? scam.threat_keywords_found.length : 0;
       if (threat >= 2)
-        items.push({ label: 'Threat Language', cls: 'flagged', text: `✗ ${threat} Keywords`, detail: scam.threat_keywords_found.join(', ') });
+        items.push({ label: 'Threat Language', cls: 'flagged', text: `✗ ${threat} Keywords`, detail: scam.threat_keywords_found.join(', '),
+          loc: { type: 'text', values: scam.threat_keywords_found } });
 
       // Reward language is low-signal; only flag at 3+
       const reward = scam.reward_keywords_found ? scam.reward_keywords_found.length : 0;
       if (reward >= 3)
-        items.push({ label: 'Reward / Prize Language', cls: 'warn', text: `⚠ ${reward} Keywords`, detail: scam.reward_keywords_found.join(', ') });
+        items.push({ label: 'Reward / Prize Language', cls: 'warn', text: `⚠ ${reward} Keywords`, detail: scam.reward_keywords_found.join(', '),
+          loc: { type: 'text', values: scam.reward_keywords_found } });
     }
 
     const tech = signals.technical_structural;
     if (tech) {
       if (tech.hidden_iframe_count > 0)
-        items.push({ label: 'Hidden Iframes', cls: 'flagged', text: `✗ ${tech.hidden_iframe_count} Found` });
+        items.push({ label: 'Hidden Iframes', cls: 'flagged', text: `✗ ${tech.hidden_iframe_count} Found`,
+          loc: { type: 'selector', values: tech.hidden_iframe_selectors || [] } });
       if (tech.redirect_detected)
         items.push({ label: 'Page Redirect', cls: 'flagged', text: '✗ Detected' });
     }
@@ -136,9 +166,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const layout = signals.layout_deception;
     if (layout) {
       if (layout.full_screen_overlays)
-        items.push({ label: 'Fullscreen Overlay', cls: 'flagged', text: '✗ Detected' });
+        items.push({ label: 'Fullscreen Overlay', cls: 'flagged', text: '✗ Detected',
+          loc: { type: 'selector', values: layout.overlay_selectors || [] } });
       if (layout.fake_browser_ui_elements)
-        items.push({ label: 'Fake Browser UI', cls: 'flagged', text: '✗ Detected' });
+        items.push({ label: 'Fake Browser UI', cls: 'flagged', text: '✗ Detected',
+          loc: { type: 'selector', values: layout.fake_ui_selectors || [] } });
     }
 
     // AI model score — show when it's the primary reason for a warning/danger
@@ -177,24 +209,23 @@ document.addEventListener('DOMContentLoaded', function() {
       const danger  = issues.filter(i => i.cls === 'flagged').length;
       const warn    = issues.filter(i => i.cls === 'warn').length;
       const countClass = danger > 0 ? 'danger' : 'warn';
-      countEl.innerHTML = `
-        <span class="issues-count ${countClass}">
-          ${danger > 0 ? `✗ ${danger} problem${danger > 1 ? 's' : ''}` : ''}
-          ${warn   > 0 ? `  ⚠ ${warn} warning${warn   > 1 ? 's' : ''}` : ''}
-        </span>`;
+      const parts = [];
+      if (danger > 0) parts.push(`${danger} problem${danger > 1 ? 's' : ''}`);
+      if (warn > 0) parts.push(`${warn} warning${warn > 1 ? 's' : ''}`);
+      countEl.innerHTML = `<span class="issues-count ${countClass}">${parts.join(' · ')}</span>`;
       flagsList.appendChild(countEl);
 
-      // ── Issues — prominent rows ─────────────────────────────
+      // ── Issues — clean single rows (no redundant badges) ────
       issues.forEach(item => {
         const row = document.createElement('div');
         row.className = `issue-row issue-row--${item.cls}`;
+        const sub = item.detail || (item.text || '').replace(/^[✗⚠]\s*/, '');
         row.innerHTML = `
           <div class="issue-icon">${item.cls === 'flagged' ? '✗' : '⚠'}</div>
           <div class="issue-body">
             <span class="issue-label">${item.label}</span>
-            ${item.detail ? `<span class="issue-detail">${item.detail}</span>` : ''}
-          </div>
-          <span class="flag-badge ${item.cls}">${item.text}</span>`;
+            ${sub && sub !== item.label ? `<span class="issue-detail">${sub}</span>` : ''}
+          </div>`;
         flagsList.appendChild(row);
       });
 
@@ -236,8 +267,188 @@ document.addEventListener('DOMContentLoaded', function() {
       target: { tabId: tab.id },
       func: (data) => {
         const BANNER_ID = '__fraud-ext-banner__';
+        const HL_ID = '__fraud-ext-hl__';
         const existing = document.getElementById(BANNER_ID);
         if (existing) existing.remove();
+        const oldHl = document.getElementById(HL_ID);
+        if (oldHl) oldHl.remove();
+
+        // ── On-page highlighter ─────────────────────────────────
+        function clearHighlights() {
+          const c = document.getElementById(HL_ID);
+          if (c) c.remove();
+        }
+
+        function hlContainer() {
+          clearHighlights();
+          const c = document.createElement('div');
+          c.id = HL_ID;
+          c.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;z-index:2147483646;pointer-events:none;';
+          document.documentElement.appendChild(c);
+          if (!document.getElementById(HL_ID + '-style')) {
+            const s = document.createElement('style');
+            s.id = HL_ID + '-style';
+            s.textContent = '@keyframes __fraudPulse{0%,100%{box-shadow:0 0 0 3px rgba(239,68,68,0.9),0 0 18px rgba(239,68,68,0.6)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0.5),0 0 28px rgba(239,68,68,0.4)}}';
+            document.documentElement.appendChild(s);
+          }
+          return c;
+        }
+
+        function drawBox(container, rect, num, note) {
+          const pad = 4;
+          const w = Math.max(rect.width, 28), h = Math.max(rect.height, 24);
+          const box = document.createElement('div');
+          box.style.cssText = [
+            'position:absolute',
+            'left:' + (rect.left + window.scrollX - pad) + 'px',
+            'top:' + (rect.top + window.scrollY - pad) + 'px',
+            'width:' + (w + pad * 2) + 'px',
+            'height:' + (h + pad * 2) + 'px',
+            'border:2px solid #ef4444',
+            'border-radius:6px',
+            'background:rgba(239,68,68,0.12)',
+            'animation:__fraudPulse 1.2s ease-in-out infinite',
+            'pointer-events:none'
+          ].join(';');
+          const tag = document.createElement('div');
+          tag.textContent = num + (note ? ' · ' + note : '');
+          tag.style.cssText = 'position:absolute;top:-22px;left:-2px;background:#ef4444;color:#fff;font:700 11px/1 -apple-system,sans-serif;padding:4px 7px;border-radius:5px;white-space:nowrap;';
+          box.appendChild(tag);
+          container.appendChild(box);
+        }
+
+        // Highlight elements by CSS selector; returns count found
+        function highlightSelectors(selectors, label) {
+          const c = hlContainer();
+          let n = 0, firstEl = null;
+          (selectors || []).forEach(sel => {
+            let el = null;
+            try { el = document.querySelector(sel); } catch (_) {}
+            if (!el) return;
+            n++;
+            const rect = el.getBoundingClientRect();
+            const hidden = rect.width === 0 && rect.height === 0;
+            if (hidden) {
+              // display:none element — mark its parent's location instead
+              const p = el.parentElement;
+              const prect = p ? p.getBoundingClientRect() : { left: 8, top: 8, width: 120, height: 24 };
+              drawBox(c, prect, n, label + ' (hidden here)');
+              if (!firstEl && p) firstEl = p;
+            } else {
+              drawBox(c, rect, n, label);
+              if (!firstEl) firstEl = el;
+            }
+          });
+          if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return n;
+        }
+
+        // Highlight first few occurrences of each keyword in page text
+        function highlightText(words, label) {
+          const c = hlContainer();
+          let n = 0, firstRect = null;
+          const seen = {};
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => {
+              const pe = node.parentElement;
+              if (!pe) return NodeFilter.FILTER_REJECT;
+              if (pe.closest('#' + BANNER_ID) || pe.closest('#' + HL_ID)) return NodeFilter.FILTER_REJECT;
+              const st = window.getComputedStyle(pe);
+              if (st.display === 'none' || st.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+              return NodeFilter.FILTER_ACCEPT;
+            }
+          });
+          let node;
+          while ((node = walker.nextNode()) && n < 15) {
+            const textLower = node.textContent.toLowerCase();
+            for (const word of words) {
+              const w = word.toLowerCase();
+              if ((seen[w] || 0) >= 2) continue; // max 2 marks per keyword
+              let idx = textLower.indexOf(w);
+              if (idx === -1) continue;
+              try {
+                const range = document.createRange();
+                range.setStart(node, idx);
+                range.setEnd(node, idx + w.length);
+                const rect = range.getBoundingClientRect();
+                if (rect.width === 0) continue;
+                n++;
+                seen[w] = (seen[w] || 0) + 1;
+                drawBox(c, rect, n, '"' + word + '"');
+                if (!firstRect) firstRect = rect;
+              } catch (_) {}
+            }
+          }
+          if (firstRect) {
+            window.scrollTo({ top: firstRect.top + window.scrollY - window.innerHeight / 3, behavior: 'smooth' });
+          }
+          return n;
+        }
+
+        function highlightFlag(flag, label) {
+          if (!flag.loc || !flag.loc.values || flag.loc.values.length === 0) return 0;
+          return flag.loc.type === 'text'
+            ? highlightText(flag.loc.values, label)
+            : highlightSelectors(flag.loc.values, label);
+        }
+
+        // Highlight everything at once (all locatable flags in one pass)
+        function highlightAll(flags) {
+          const c = hlContainer();
+          let n = 0, firstEl = null, firstRect = null;
+          flags.forEach(flag => {
+            if (!flag.loc || !flag.loc.values || flag.loc.values.length === 0) return;
+            if (flag.loc.type === 'selector') {
+              flag.loc.values.forEach(sel => {
+                let el = null;
+                try { el = document.querySelector(sel); } catch (_) {}
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                const hidden = rect.width === 0 && rect.height === 0;
+                n++;
+                if (hidden) {
+                  const p = el.parentElement;
+                  drawBox(c, p ? p.getBoundingClientRect() : { left: 8, top: 8, width: 120, height: 24 }, n, flag.label + ' (hidden)');
+                } else {
+                  drawBox(c, rect, n, flag.label);
+                  if (!firstEl) firstEl = el;
+                }
+              });
+            } else {
+              const seen = {};
+              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+                acceptNode: (node) => {
+                  const pe = node.parentElement;
+                  if (!pe || pe.closest('#' + BANNER_ID) || pe.closest('#' + HL_ID)) return NodeFilter.FILTER_REJECT;
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+              });
+              let node, found = 0;
+              while ((node = walker.nextNode()) && found < 6) {
+                const textLower = node.textContent.toLowerCase();
+                for (const word of flag.loc.values) {
+                  const w = word.toLowerCase();
+                  if (seen[w]) continue;
+                  const idx = textLower.indexOf(w);
+                  if (idx === -1) continue;
+                  try {
+                    const range = document.createRange();
+                    range.setStart(node, idx);
+                    range.setEnd(node, idx + w.length);
+                    const rect = range.getBoundingClientRect();
+                    if (rect.width === 0) continue;
+                    n++; found++; seen[w] = true;
+                    drawBox(c, rect, n, '"' + word + '"');
+                    if (!firstRect) firstRect = rect;
+                  } catch (_) {}
+                }
+              }
+            }
+          });
+          if (firstEl) firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          else if (firstRect) window.scrollTo({ top: firstRect.top + window.scrollY - window.innerHeight / 3, behavior: 'smooth' });
+          return n;
+        }
 
         const host = document.createElement('div');
         host.id = BANNER_ID;
@@ -255,11 +466,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const style = document.createElement('style');
         style.textContent = `
+          * { box-sizing: border-box; }
           .panel {
             background: #0d1117;
             border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 14px;
-            padding: 14px 16px 12px;
+            border-radius: 12px;
+            padding: 12px;
             box-shadow: 0 12px 40px rgba(0,0,0,0.7);
             animation: slideUp 0.3s cubic-bezier(0.4,0,0.2,1);
           }
@@ -269,21 +481,27 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           .header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            gap: 10px;
           }
-          .brand {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 10px;
-            font-weight: 700;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+          .score-chip {
+            font-size: 15px;
+            font-weight: 800;
+            padding: 5px 10px;
+            border-radius: 8px;
+            line-height: 1;
+            flex-shrink: 0;
           }
-          .shield { font-size: 14px; }
+          .score-chip.safe    { background: rgba(16,185,129,0.15); color: #10b981; }
+          .score-chip.warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
+          .score-chip.danger  { background: rgba(239,68,68,0.15);  color: #ef4444; }
+          .verdict {
+            flex: 1;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+            color: #e5e7eb;
+          }
           .close {
             background: none;
             border: none;
@@ -291,164 +509,178 @@ document.addEventListener('DOMContentLoaded', function() {
             cursor: pointer;
             font-size: 18px;
             line-height: 1;
-            padding: 0;
-            transition: color 0.15s;
+            padding: 2px;
+            flex-shrink: 0;
+            align-self: flex-start;
           }
           .close:hover { color: #f3f4f6; }
-          .score-row {
+          .hint {
+            font-size: 10px;
+            color: #6b7280;
+            margin: 10px 0 6px;
+          }
+          .issue {
             display: flex;
-            align-items: baseline;
-            gap: 10px;
-            margin-bottom: 10px;
-          }
-          .score-num {
-            font-size: 32px;
-            font-weight: 800;
-            color: #fff;
-            line-height: 1;
-          }
-          .verdict {
-            font-size: 13px;
-            font-weight: 600;
-            line-height: 1.3;
-          }
-          .verdict.safe    { color: #10b981; }
-          .verdict.warning { color: #f59e0b; }
-          .verdict.danger  { color: #ef4444; }
-          .divider {
-            border: none;
-            border-top: 1px solid rgba(255,255,255,0.08);
-            margin: 8px 0;
-          }
-          .flag-row {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 3px 0;
             gap: 8px;
+            padding: 7px 9px;
+            border-radius: 8px;
+            margin: 4px 0;
+            border: 1px solid transparent;
           }
-          .flag-label {
-            font-size: 11px;
-            color: #9ca3af;
-            flex: 1;
-          }
-          .issue-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            padding: 6px 8px;
-            border-radius: 6px;
-            margin: 3px 0;
-          }
-          .issue-row--flagged {
-            background: rgba(239,68,68,0.10);
-            border: 1px solid rgba(239,68,68,0.20);
-          }
-          .issue-row--warn {
-            background: rgba(245,158,11,0.10);
-            border: 1px solid rgba(245,158,11,0.20);
-          }
+          .issue--flagged { background: rgba(239,68,68,0.08); }
+          .issue--warn    { background: rgba(245,158,11,0.08); }
+          .issue.locatable { cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+          .issue--flagged.locatable:hover { background: rgba(239,68,68,0.16); }
+          .issue--warn.locatable:hover    { background: rgba(245,158,11,0.16); }
+          .issue.active { border-color: rgba(239,68,68,0.5); }
           .issue-icon {
             font-size: 11px;
             font-weight: 700;
-            margin-top: 1px;
             flex-shrink: 0;
+            width: 12px;
+            text-align: center;
           }
-          .issue-row--flagged .issue-icon { color: #ef4444; }
-          .issue-row--warn    .issue-icon { color: #f59e0b; }
-          .issue-body {
-            flex: 1;
-            min-width: 0;
-          }
+          .issue--flagged .issue-icon { color: #ef4444; }
+          .issue--warn    .issue-icon { color: #f59e0b; }
+          .issue-body { flex: 1; min-width: 0; }
           .issue-label {
             display: block;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
             color: #e5e7eb;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
-          .issue-detail {
+          .issue-sub {
             display: block;
             font-size: 10px;
             color: #9ca3af;
-            font-style: italic;
-            margin-top: 2px;
-            word-break: break-word;
-          }
-          .badge {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 4px;
+            margin-top: 1px;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
-          .badge.flagged {
+          .pin {
+            font-size: 12px;
+            flex-shrink: 0;
+            opacity: 0.6;
+          }
+          .issue.locatable:hover .pin { opacity: 1; }
+          .show-all {
+            display: block;
+            width: 100%;
+            background: none;
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 7px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.15s;
+          }
+          .show-all:hover { border-color: rgba(255,255,255,0.3); color: #e5e7eb; }
+          .show-all.active {
             background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.35);
             color: #ef4444;
-            border: 1px solid rgba(239,68,68,0.25);
-          }
-          .badge.clear {
-            background: rgba(16,185,129,0.12);
-            color: #10b981;
-            border: 1px solid rgba(16,185,129,0.25);
-          }
-          .badge.warn {
-            background: rgba(245,158,11,0.12);
-            color: #f59e0b;
-            border: 1px solid rgba(245,158,11,0.25);
           }
         `;
 
         const panel = document.createElement('div');
         panel.className = 'panel';
 
-        // Header
+        // Header: score chip + verdict + close (one row)
         const header = document.createElement('div');
         header.className = 'header';
-        const brand = document.createElement('div');
-        brand.className = 'brand';
-        brand.innerHTML = `<span class="shield">🛡️</span> Fraud Detector`;
+        const chip = document.createElement('span');
+        chip.className = `score-chip ${data.verdictClass}`;
+        chip.textContent = data.trustScore;
+        const verdictEl = document.createElement('span');
+        verdictEl.className = 'verdict';
+        verdictEl.textContent = data.verdictText;
         const closeBtn = document.createElement('button');
         closeBtn.className = 'close';
         closeBtn.textContent = '×';
-        closeBtn.addEventListener('click', () => host.remove());
-        header.appendChild(brand);
+        closeBtn.addEventListener('click', () => { clearHighlights(); host.remove(); });
+        header.appendChild(chip);
+        header.appendChild(verdictEl);
         header.appendChild(closeBtn);
-
-        // Score + verdict
-        const scoreRow = document.createElement('div');
-        scoreRow.className = 'score-row';
-        scoreRow.innerHTML = `
-          <span class="score-num">${data.trustScore}</span>
-          <span class="verdict ${data.verdictClass}">${data.verdictText}</span>
-        `;
-
         panel.appendChild(header);
-        panel.appendChild(scoreRow);
 
         if (data.flags && data.flags.length > 0) {
-          const divider = document.createElement('hr');
-          divider.className = 'divider';
-          panel.appendChild(divider);
+          const locatable = data.flags.filter(f => f.loc && f.loc.values && f.loc.values.length > 0);
+          let activeRow = null; // only one highlight set at a time
+
+          const hint = document.createElement('div');
+          hint.className = 'hint';
+          hint.textContent = locatable.length > 0
+            ? `${data.flags.length} issue${data.flags.length > 1 ? 's' : ''} — click one to see it on the page`
+            : `${data.flags.length} issue${data.flags.length > 1 ? 's' : ''} found`;
+          panel.appendChild(hint);
+
+          function deactivate() {
+            if (activeRow) activeRow.classList.remove('active');
+            activeRow = null;
+          }
 
           data.flags.forEach(flag => {
+            const hasLoc = flag.loc && flag.loc.values && flag.loc.values.length > 0;
             const row = document.createElement('div');
-            row.className = `issue-row issue-row--${flag.cls}`;
+            row.className = `issue issue--${flag.cls}${hasLoc ? ' locatable' : ''}`;
+
+            // Single clean row: icon, label + one sub-line, pin if locatable
+            const sub = flag.detail || (flag.text || '').replace(/^[✗⚠]\s*/, '');
             row.innerHTML = `
-              <div class="issue-icon">${flag.cls === 'flagged' ? '✗' : '⚠'}</div>
-              <div class="issue-body">
+              <span class="issue-icon">${flag.cls === 'flagged' ? '✗' : '⚠'}</span>
+              <span class="issue-body">
                 <span class="issue-label">${flag.label}</span>
-                ${flag.detail ? `<span class="issue-detail">${flag.detail}</span>` : ''}
-              </div>
-              <span class="badge ${flag.cls}">${flag.text}</span>
+                ${sub && sub !== flag.label ? `<span class="issue-sub">${sub}</span>` : ''}
+              </span>
+              ${hasLoc ? '<span class="pin">📍</span>' : ''}
             `;
+
+            if (hasLoc) {
+              row.addEventListener('click', () => {
+                if (row === activeRow) { clearHighlights(); deactivate(); return; }
+                deactivate();
+                highlightFlag(flag, flag.label);
+                row.classList.add('active');
+                activeRow = row;
+              });
+            }
             panel.appendChild(row);
           });
 
-          if (data.flags.length === 0) {
-            const row = document.createElement('div');
-            row.className = 'flag-row';
-            row.innerHTML = `<span class="flag-label" style="color:#6b7280">All checks passed</span><span class="badge clear">✓ Clean</span>`;
-            panel.appendChild(row);
+          // "Show all" — highlight every locatable issue at once
+          if (locatable.length > 1) {
+            const showAll = document.createElement('button');
+            showAll.className = 'show-all';
+            showAll.dataset.label = 'Show all on page';
+            showAll.textContent = showAll.dataset.label;
+            showAll.addEventListener('click', () => {
+              if (showAll.classList.contains('active')) {
+                clearHighlights();
+                showAll.classList.remove('active');
+                showAll.textContent = showAll.dataset.label;
+                return;
+              }
+              deactivate();
+              const n = highlightAll(locatable);
+              showAll.classList.add('active');
+              showAll.textContent = `Hide highlights (${n} marked)`;
+            });
+            // clear show-all state when an individual row is clicked
+            panel.addEventListener('click', (e) => {
+              if (!showAll.contains(e.target) && showAll.classList.contains('active')) {
+                showAll.classList.remove('active');
+                showAll.textContent = showAll.dataset.label;
+              }
+            }, true);
+            panel.appendChild(showAll);
           }
         }
 
@@ -468,6 +700,8 @@ document.addEventListener('DOMContentLoaded', function() {
       func: () => {
         const el = document.getElementById('__fraud-ext-banner__');
         if (el) el.remove();
+        const hl = document.getElementById('__fraud-ext-hl__');
+        if (hl) hl.remove();
       }
     }).catch(() => {});
   }
@@ -498,6 +732,9 @@ document.addEventListener('DOMContentLoaded', function() {
     scanButton.textContent = 'Analyze Page';
     scanButton.className = 'btn-primary';
     scanButton.disabled = false;
+
+    lastScanData = null;
+    if (scrapeBtn) scrapeBtn.style.display = 'none';
   }
 
   scanButton.addEventListener('click', async function() {
@@ -541,6 +778,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const { trustScore, signals, pageText } = response;
         const API_BASE = "https://fraud-api-993p.onrender.com";
 
+        lastScanData = {
+          url: tab.url,
+          scanned_at: new Date().toISOString(),
+          trust_score: trustScore,
+          signals,
+          page_text: pageText || ""
+        };
+        const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+        const cacheKey = "scan:" + tab.url;
+
+        // Local cache: instant result for recently scanned URLs (no network)
+        const cached = await new Promise(resolve =>
+          chrome.storage.local.get(cacheKey, items => resolve(items[cacheKey]))
+        );
+        if (cached && cached.result && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+          heroIcon.style.animation = "none";
+          showResultFromServer(cached.result, signals, tab);
+          return;
+        }
+
         fetch(API_BASE + "/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -548,6 +805,13 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(res => res.json())
         .then(serverData => {
+          // Synchronous backend path: result returned inline — no polling needed
+          if (serverData.result) {
+            chrome.storage.local.set({ [cacheKey]: { result: serverData.result, ts: Date.now() } });
+            heroIcon.style.animation = "none";
+            showResultFromServer(serverData.result, signals, tab);
+            return;
+          }
           const jobId = serverData.job_id;
           if (jobId) { pollStatus(API_BASE, jobId, trustScore, signals, tab); return; }
           showResult(trustScore, signals, tab, true);
@@ -566,6 +830,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (data.status === "completed" && data.result) {
                 clearInterval(interval);
                 heroIcon.style.animation = "none";
+                chrome.storage.local.set({ ["scan:" + tab.url]: { result: data.result, ts: Date.now() } });
                 showResultFromServer(data.result, fallbackSignals, tab);
               }
             } catch (e) {}
@@ -605,6 +870,9 @@ document.addEventListener('DOMContentLoaded', function() {
           renderFlagItems(items);
           injectPageBanner(tab, trustDisplay, verdictText, verdictClass, items);
 
+          if (lastScanData) lastScanData.server_analysis = result;
+          showScrapeButton();
+
           scanButton.disabled = false;
           scanButton.textContent = "RESET";
           scanButton.className = "btn-reset";
@@ -633,6 +901,8 @@ document.addEventListener('DOMContentLoaded', function() {
           const items = buildFlagItems(signals, null, tab.url);
           renderFlagItems(items);
           injectPageBanner(tab, trustScore, verdictText, verdictClass, items);
+
+          showScrapeButton();
 
           scanButton.disabled = false;
           scanButton.textContent = "RESET";

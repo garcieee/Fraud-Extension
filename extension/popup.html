@@ -240,9 +240,24 @@
         border: 1px solid var(--border);
         box-shadow: none;
       }
-      .btn-reset:hover { 
+      .btn-reset:hover {
         border-color: var(--text-main);
         color: var(--text-main);
+      }
+
+      .btn-scrape {
+        display: none;
+        background: transparent;
+        color: var(--text-sub);
+        border: 1px solid var(--border);
+        box-shadow: none;
+        margin-top: 8px;
+        padding: 10px;
+        font-size: 12px;
+      }
+      .btn-scrape:hover {
+        border-color: var(--primary);
+        color: var(--primary);
       }
 
       button:active { transform: scale(0.98); }
@@ -329,7 +344,6 @@
         display: block;
         font-size: 10px;
         color: var(--text-sub);
-        font-style: italic;
         margin-top: 2px;
         word-break: break-word;
       }
@@ -460,6 +474,7 @@
 
     <div class="action-area">
       <button id="scanBtn" class="btn-primary">Analyze Page</button>
+      <button id="scrapeBtn" class="btn-scrape">⬇ Scrape Page Data (JSON)</button>
     </div>
 
     <script src="popup.js"></script>

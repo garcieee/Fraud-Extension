@@ -21,6 +21,29 @@
     return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
   }
 
+  // Build a unique CSS selector for an element so the highlighter can find it later
+  function cssPath(el) {
+    if (!(el instanceof Element)) return null;
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts = [];
+    while (el && el.nodeType === 1 && el !== document.body && el !== document.documentElement) {
+      if (el.id) { parts.unshift('#' + CSS.escape(el.id)); return parts.join(' > '); }
+      let sel = el.tagName.toLowerCase();
+      const parent = el.parentElement;
+      if (parent) {
+        const idx = Array.prototype.indexOf.call(parent.children, el) + 1;
+        sel += ':nth-child(' + idx + ')';
+      }
+      parts.unshift(sel);
+      el = el.parentElement;
+    }
+    return (parts.length ? 'body > ' + parts.join(' > ') : 'body');
+  }
+
+  function selectorsOf(elements, max) {
+    return elements.slice(0, max || 10).map(cssPath).filter(Boolean);
+  }
+
   function calculateGrammarAnomaly(text) {
     if (!text || text.length < 10) return 0;
     const uppercaseCount = (text.match(/[A-Z]/g) || []).length;
@@ -48,22 +71,27 @@
     const forms = Array.from(document.forms);
     const inputs = Array.from(document.querySelectorAll('input'));
     const suspiciousNames = ["passwd", "wallet", "seed", "privatekey", "ssn", "socialsecurity"];
+    const passwordFields = inputs.filter(i => i.type === 'password');
+    const creditCardFields = inputs.filter(i =>
+      i.name.toLowerCase().includes('card') ||
+      i.name.toLowerCase().includes('cc') ||
+      i.placeholder.toLowerCase().includes('card')
+    );
+    const suspiciousInputs = inputs.filter(i => findKeywords(i.name, suspiciousNames).length > 0);
     return {
       total_forms: forms.length,
-      has_password_field: inputs.some(i => i.type === 'password'),
+      has_password_field: passwordFields.length > 0,
       has_email_field: inputs.some(i => i.type === 'email' || i.name.toLowerCase().includes('email')),
-      has_credit_card_field: inputs.some(i =>
-        i.name.toLowerCase().includes('card') ||
-        i.name.toLowerCase().includes('cc') ||
-        i.placeholder.toLowerCase().includes('card')
-      ),
+      has_credit_card_field: creditCardFields.length > 0,
       form_action_domains: forms.map(f => {
         const action = f.getAttribute('action');
         return action ? getDomain(action) : 'self';
       }).filter(d => d),
-      suspicious_input_names: inputs
-        .map(i => i.name)
-        .filter(name => findKeywords(name, suspiciousNames).length > 0)
+      suspicious_input_names: suspiciousInputs.map(i => i.name),
+      // Selectors so the highlighter can locate these on the page
+      password_field_selectors: selectorsOf(passwordFields),
+      credit_card_field_selectors: selectorsOf(creditCardFields),
+      suspicious_input_selectors: selectorsOf(suspiciousInputs)
     };
   }
 
@@ -71,12 +99,11 @@
     const topBrands = ["paypal", "apple", "microsoft", "google", "facebook", "netflix", "amazon", "bankofamerica", "chase", "wellsfargo"];
     const bodyText = document.body.innerText;
     const images = Array.from(document.images);
+    const brandLogos = images.filter(img => findKeywords(img.src, topBrands).length > 0);
     return {
       visible_brand_keywords: findKeywords(bodyText, topBrands),
-      logo_image_sources: images
-        .map(img => img.src)
-        .filter(src => findKeywords(src, topBrands).length > 0)
-        .slice(0, 5),
+      logo_image_sources: brandLogos.map(img => img.src).slice(0, 5),
+      brand_logo_selectors: selectorsOf(brandLogos, 5),
       domain_looks_like_brand: topBrands.some(brand =>
         window.location.hostname.includes(brand) && window.location.hostname !== `${brand}.com`
       )
@@ -99,10 +126,11 @@
   function extractTech() {
     const scripts = Array.from(document.querySelectorAll('script[src]'));
     const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
+    const hiddenIframes = Array.from(document.querySelectorAll('iframe')).filter(iframe => !isVisible(iframe));
     return {
       iframe_count: document.querySelectorAll('iframe').length,
-      hidden_iframe_count: Array.from(document.querySelectorAll('iframe'))
-        .filter(iframe => !isVisible(iframe)).length,
+      hidden_iframe_count: hiddenIframes.length,
+      hidden_iframe_selectors: selectorsOf(hiddenIframes),
       external_script_domains: [...new Set(scripts
         .map(s => getDomain(s.src))
         .filter(d => d && d !== window.location.hostname)
@@ -143,14 +171,16 @@
       const z = parseInt(window.getComputedStyle(el).zIndex);
       return z > 9000;
     }).length;
+    const fakeUIElements = Array.from(allElements).filter(el => {
+      const id = el.id.toLowerCase();
+      const className = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+      return fakeUIKeywords.some(kw => id.includes(kw) || className.includes(kw));
+    });
     return {
       full_screen_overlays: overlays.length > 0,
-      fake_browser_ui_elements: Array.from(allElements)
-        .some(el => {
-          const id = el.id.toLowerCase();
-          const className = typeof el.className === 'string' ? el.className.toLowerCase() : '';
-          return fakeUIKeywords.some(kw => id.includes(kw) || className.includes(kw));
-        }),
+      overlay_selectors: selectorsOf(overlays, 5),
+      fake_browser_ui_elements: fakeUIElements.length > 0,
+      fake_ui_selectors: selectorsOf(fakeUIElements, 5),
       z_index_abuse_count: highZIndexCount
     };
   }
